@@ -7,9 +7,12 @@
   },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
+    "assets:sync": "node scripts/sync-generated-assets.mjs",
+    "assets:check": "node scripts/sync-generated-assets.mjs --check",
+    "dev": "node scripts/sync-generated-assets.mjs && vite",
     "build": "bash scripts/build-verified.sh",
     "build:pages": "node scripts/build-github-pages.mjs",
+    "preview": "node scripts/preview-built.mjs",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "crown-chest",
+  "name": "皇冠收纳箱",
+  "category": "storage",
+  "status": "candidate",
+  "color": "#265e9d",
+  "factoryFile": "createCrownChestModel.ts",
+  "factoryExport": "createCrownChestModel",
+  "referenceImage": "/generated-assets/crown-chest/reference.png",
+  "sourceUrl": "https://github.com/img2threejs/img2threejs-showcase/blob/main/src/demos/crown-chest/createCrownChestModel.ts",
+  "sourceRevision": "34504676cf7257956adaed535b23ff2b242649ba",
+  "dimensions": null,
+  "dimensionSource": null,
+  "qualityEvidence": [
+    {
+      "kind": "reference",
+      "label": "单张 3/4 参考图",
+      "path": "/generated-assets/crown-chest/reference.png"
+    },
+    {
+      "kind": "source",
+      "label": "img2threejs Showcase 已验证工厂",
+      "path": "https://github.com/img2threejs/img2threejs-showcase/tree/main/src/demos/crown-chest"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "approvedFactoryHash": null,
+  "reviewedAt": null
+}

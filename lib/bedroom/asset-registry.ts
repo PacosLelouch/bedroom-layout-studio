@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { createAdaptedGeneratedModel } from "./generated/model-adapter";
+import { APPROVED_GENERATED_ASSETS } from "./generated/registry";
 import type { FurnitureItem, ProceduralAssetOptions, RoomLayout } from "./types";
 
 export type ProceduralAssetFactory = (spec: unknown, options: ProceduralAssetOptions) => THREE.Group;
@@ -54,7 +56,7 @@ const deskFactory: ProceduralAssetFactory = (_spec, options) => {
   return group;
 };
 
-export const ASSET_CATALOG: CatalogAsset[] = [
+const BUILTIN_ASSET_CATALOG: CatalogAsset[] = [
   { id: "double-bed", name: "双人床", category: "bed", size: { width: 1800, depth: 2100, height: 520 }, color: "#d9cbb9", factory: bedFactory, source: "builtin" },
   { id: "queen-bed", name: "1500 双人床", category: "bed", size: { width: 1500, depth: 2000, height: 520 }, color: "#b8c8bf", factory: bedFactory, source: "builtin" },
   { id: "single-bed", name: "单人床", category: "bed", size: { width: 1200, depth: 2000, height: 500 }, color: "#b8c8bf", factory: bedFactory, source: "builtin" },
@@ -64,11 +66,24 @@ export const ASSET_CATALOG: CatalogAsset[] = [
   { id: "desk", name: "书桌", category: "desk", size: { width: 1200, depth: 600, height: 750 }, color: "#a98d69", factory: deskFactory, source: "builtin" },
   { id: "vanity", name: "梳妆台", category: "desk", size: { width: 1050, depth: 450, height: 750 }, color: "#aa8b69", factory: deskFactory, source: "builtin" },
   { id: "wall-cabinet", name: "吊书柜", category: "storage", size: { width: 1000, depth: 300, height: 700 }, color: "#c5ad8c", factory: simpleFactory, source: "builtin" },
+  { id: "entry-cabinet", name: "收纳薄柜", category: "storage", size: { width: 800, depth: 350, height: 2200 }, color: "#bda989", factory: simpleFactory, source: "builtin" },
   { id: "nightstand", name: "床头柜", category: "storage", size: { width: 480, depth: 420, height: 520 }, color: "#b99f7c", factory: simpleFactory, source: "builtin" },
   { id: "desk-chair", name: "书桌椅", category: "seat", size: { width: 460, depth: 460, height: 820 }, color: "#6f877d", factory: simpleFactory, source: "builtin" },
   { id: "stool", name: "凳子", category: "seat", size: { width: 420, depth: 420, height: 450 }, color: "#b97968", factory: simpleFactory, source: "builtin" },
   { id: "lounge-chair", name: "休闲椅", category: "seat", size: { width: 720, depth: 760, height: 820 }, color: "#b76e5d", factory: simpleFactory, source: "builtin" },
 ];
+
+const GENERATED_ASSET_CATALOG: CatalogAsset[] = APPROVED_GENERATED_ASSETS.map((asset) => ({
+  id: asset.manifest.id,
+  name: asset.manifest.name,
+  category: asset.manifest.category,
+  size: asset.manifest.dimensions!,
+  color: asset.manifest.color,
+  source: "img2threejs",
+  factory: (_spec, options) => createAdaptedGeneratedModel(asset.factory, options.dimensions, { strict: true }).group,
+}));
+
+export const ASSET_CATALOG: CatalogAsset[] = [...BUILTIN_ASSET_CATALOG, ...GENERATED_ASSET_CATALOG];
 
 const externalFactories = new Map<string, CatalogAsset>();
 

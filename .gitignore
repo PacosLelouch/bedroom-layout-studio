@@ -40,3 +40,6 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# Local repository skill junction (created by scripts/link-img2threejs-skill.ps1)
+/.agents/skills/img2threejs

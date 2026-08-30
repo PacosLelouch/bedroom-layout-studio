@@ -1,23 +1,33 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Armchair, BedDouble, Box, ChevronDown, Copy, FileImage, Grid3X3, Layers3,
-  Maximize2, MousePointer2, Redo2, RotateCcw, Ruler, Sparkles,
+  Maximize2, MousePointer2, Move, Redo2, RotateCcw, RotateCw, Ruler, Sparkles,
   Trash2, Undo2, Upload, X,
 } from "lucide-react";
 import { BedroomViewport } from "@/components/bedroom-viewport";
 import { ASSET_CATALOG, catalogItemToFurniture } from "@/lib/bedroom/asset-registry";
+import { PENDING_GENERATED_ASSET_COUNT } from "@/lib/bedroom/generated/registry";
 import { collides } from "@/lib/bedroom/geometry";
 import { INITIAL_ROOMS } from "@/lib/bedroom/room-layouts";
-import type { FurnitureItem, ViewMode } from "@/lib/bedroom/types";
+import type { FurnitureItem, InteractionMode, RoomLayout, ViewMode } from "@/lib/bedroom/types";
+
+interface LayoutHistory {
+  past: RoomLayout[][];
+  present: RoomLayout[];
+  future: RoomLayout[][];
+}
 
 export default function Home() {
-  const [rooms, setRooms] = useState(INITIAL_ROOMS);
+  const [layoutHistory, setLayoutHistory] = useState<LayoutHistory>(() => ({ past: [], present: INITIAL_ROOMS, future: [] }));
+  const rooms = layoutHistory.present;
   const [roomId, setRoomId] = useState("master");
   const [selectedId, setSelectedId] = useState<string | null>("master-bed");
   const [viewMode, setViewMode] = useState<ViewMode>("perspective");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("interact");
   const [snap, setSnap] = useState(100);
   const [showGrid, setShowGrid] = useState(true);
   const [showWalls, setShowWalls] = useState(true);
@@ -28,25 +38,72 @@ export default function Home() {
   const occupiedArea = useMemo(() => room.items.filter((item) => !item.wallMounted).reduce((sum, item) => sum + item.size.width * item.size.depth, 0), [room.items]);
   const occupancy = Math.min(100, Math.round(occupiedArea / (room.clearArea * 1_000_000) * 100));
 
-  const updateItem = useCallback((id: string, patch: Partial<FurnitureItem>) => {
-    setRooms((current) => current.map((entry) => entry.id !== roomId ? entry : {
+  const applyRooms = useCallback((updater: (current: RoomLayout[]) => RoomLayout[], recordHistory = true) => {
+    setLayoutHistory((current) => {
+      const next = updater(current.present);
+      if (next === current.present) return current;
+      return recordHistory
+        ? { past: [...current.past, current.present].slice(-60), present: next, future: [] }
+        : { ...current, present: next };
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    setLayoutHistory((current) => {
+      const previous = current.past.at(-1);
+      if (!previous) return current;
+      return { past: current.past.slice(0, -1), present: previous, future: [current.present, ...current.future].slice(0, 60) };
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setLayoutHistory((current) => {
+      const next = current.future[0];
+      if (!next) return current;
+      return { past: [...current.past, current.present].slice(-60), present: next, future: current.future.slice(1) };
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
+      if (event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo(); else undo();
+      } else if (event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [redo, undo]);
+
+  const updateItem = useCallback((id: string, patch: Partial<FurnitureItem>, options?: { recordHistory?: boolean }) => {
+    applyRooms((current) => current.map((entry) => entry.id !== roomId ? entry : {
       ...entry, items: entry.items.map((item) => item.id === id ? { ...item, ...patch } : item),
+    }), options?.recordHistory !== false);
+  }, [applyRooms, roomId]);
+  const toggleDoor = useCallback((doorId: string) => {
+    applyRooms((current) => current.map((entry) => entry.id !== roomId ? entry : {
+      ...entry, doors: entry.doors.map((door) => door.id === doorId ? { ...door, isOpen: door.isOpen === false } : door),
     }));
-  }, [roomId]);
+  }, [applyRooms, roomId]);
   const addItem = (assetId: string) => {
     const item = catalogItemToFurniture(assetId, room);
-    setRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: [...entry.items, item] } : entry));
+    applyRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: [...entry.items, item] } : entry));
     setSelectedId(item.id);
   };
   const removeItem = () => {
     if (!selectedId) return;
-    setRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: entry.items.filter((item) => item.id !== selectedId) } : entry));
+    applyRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: entry.items.filter((item) => item.id !== selectedId) } : entry));
     setSelectedId(null);
   };
   const duplicate = () => {
     if (!selected) return;
     const copy = { ...selected, id: `${selected.assetId}-${Date.now()}`, position: { x: selected.position.x + 200, z: selected.position.z + 200 } };
-    setRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: [...entry.items, copy] } : entry));
+    applyRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: [...entry.items, copy] } : entry));
     setSelectedId(copy.id);
   };
 
@@ -63,8 +120,8 @@ export default function Home() {
           <button className="room-tab add-room" title="添加房间">＋</button>
         </nav>
         <div className="top-actions">
-          <button className="icon-button" aria-label="撤销"><Undo2 size={17} /></button>
-          <button className="icon-button muted" aria-label="重做"><Redo2 size={17} /></button>
+          <button className={layoutHistory.past.length ? "icon-button" : "icon-button muted"} aria-label="撤销" title="撤销 Ctrl+Z" onClick={undo} disabled={!layoutHistory.past.length}><Undo2 size={17} /></button>
+          <button className={layoutHistory.future.length ? "icon-button" : "icon-button muted"} aria-label="重做" title="重做 Ctrl+Y" onClick={redo} disabled={!layoutHistory.future.length}><Redo2 size={17} /></button>
           <button className="primary-button"><Sparkles size={15} /> 保存方案</button>
         </div>
       </header>
@@ -73,7 +130,7 @@ export default function Home() {
         <aside className="asset-panel">
           <div className="panel-heading">
             <div><span className="eyebrow">ASSET LIBRARY</span><h2>家具素材</h2></div>
-            <button className="icon-button" title="导入 img2threejs 资产"><Upload size={16} /></button>
+            <Link className="icon-button" title="检视 img2threejs 候选资产" href="/asset-review"><Upload size={16} /></Link>
           </div>
           <div className="asset-search"><MousePointer2 size={15} /><span>点击家具添加到房间</span></div>
           <div className="asset-grid">
@@ -87,11 +144,11 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <button className="pipeline-card">
+          <Link className="pipeline-card" href="/asset-review">
             <span className="pipeline-icon"><Sparkles size={18} /></span>
-            <span><strong>img2threejs 资产入口</strong><small>接入程序化 Group 工厂</small></span>
+            <span><strong>img2threejs 资产检视</strong><small>{PENDING_GENERATED_ASSET_COUNT} 个候选等待尺寸与批准</small></span>
             <ChevronDown size={16} />
-          </button>
+          </Link>
           <div className="panel-note">所有尺寸均为毫米 · Y 轴向上</div>
         </aside>
 
@@ -101,19 +158,27 @@ export default function Home() {
               <button className={viewMode === "top" ? "active" : ""} onClick={() => setViewMode("top")}><Grid3X3 size={15} /> 平面</button>
               <button className={viewMode === "perspective" ? "active" : ""} onClick={() => setViewMode("perspective")}><Box size={15} /> 3D</button>
             </div>
+            <div className="segmented interaction-modes" aria-label="鼠标模式">
+              <button className={interactionMode === "interact" ? "active" : ""} onClick={() => setInteractionMode("interact")} title="单击门或其他可交互素材"><MousePointer2 size={15} /> 交互</button>
+              <button className={interactionMode === "move" ? "active" : ""} onClick={() => setInteractionMode("move")} title="拖拽家具移动位置"><Move size={15} /> 移动</button>
+              <button className={interactionMode === "rotate" ? "active" : ""} onClick={() => setInteractionMode("rotate")} title="左右拖拽家具旋转"><RotateCw size={15} /> 旋转</button>
+            </div>
             <span className="room-dimension"><Ruler size={14} /> 净尺寸 {room.dimensions.width} × {room.dimensions.depth} mm</span>
             <button className={showReference ? "tool-button reference active" : "tool-button reference"} onClick={() => setShowReference((value) => !value)}><FileImage size={14} /> 标尺原图</button>
             <button className="tool-button" onClick={() => setShowWalls((value) => !value)}>{showWalls ? "隐藏墙体" : "显示墙体"}</button>
             <button className="icon-button" title="适应窗口"><Maximize2 size={16} /></button>
           </div>
           <BedroomViewport room={room} selectedId={selectedId} collisionIds={collisionIds}
-            viewMode={viewMode} snap={snap} showGrid={showGrid} showWalls={showWalls}
-            onSelect={setSelectedId} onChangeItem={updateItem} />
+            viewMode={viewMode} interactionMode={interactionMode} snap={snap} showGrid={showGrid} showWalls={showWalls}
+            onSelect={setSelectedId} onChangeItem={updateItem} onToggleDoor={toggleDoor} />
           {showReference && <aside className="plan-reference no-scrollbar" aria-label={`${room.name}标尺原图`}>
             <div className="plan-reference-heading"><span><strong>{room.name}标尺原图</strong><small>SVG · 尺寸权威来源</small></span><button onClick={() => setShowReference(false)} aria-label="关闭标尺原图"><X size={15} /></button></div>
             <Image src={room.planSrc} alt={`${room.name}建筑标尺图`} width={1200} height={1300} unoptimized />
           </aside>}
-          <div className="canvas-help"><span>拖拽移动</span><i /><span>滚轮缩放</span><i /><span>拖动空白处旋转视角</span></div>
+          <div className="canvas-help">
+            <span>{interactionMode === "interact" ? "单击素材触发交互" : interactionMode === "move" ? "拖拽家具移动" : "左右拖拽家具旋转"}</span>
+            <i /><span>滚轮缩放</span><i /><span>拖动空白处观察</span>
+          </div>
           <div className="status-pill"><span className={collisionIds.size ? "status-dot warning" : "status-dot"} />
             {collisionIds.size ? `${collisionIds.size} 件家具需要调整` : "布局无冲突"}</div>
         </section>
