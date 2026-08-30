@@ -4,18 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { createAssetGroup } from "@/lib/bedroom/asset-registry";
 import { clearanceRect } from "@/lib/bedroom/geometry";
-import type { FurnitureItem, RoomLayout, ViewMode } from "@/lib/bedroom/types";
+import { disposeObjectTree } from "@/lib/bedroom/three-disposal";
+import type { FurnitureItem, InteractionMode, RoomLayout, ViewMode } from "@/lib/bedroom/types";
 
 interface Props {
   room: RoomLayout;
   selectedId: string | null;
   collisionIds: Set<string>;
   viewMode: ViewMode;
+  interactionMode: InteractionMode;
   snap: number;
   showGrid: boolean;
   showWalls: boolean;
   onSelect: (id: string | null) => void;
-  onChangeItem: (id: string, patch: Partial<FurnitureItem>) => void;
+  onChangeItem: (id: string, patch: Partial<FurnitureItem>, options?: { recordHistory?: boolean }) => void;
+  onToggleDoor: (id: string) => void;
 }
 
 type ViewportState = { rebuild: () => void };
@@ -67,6 +70,10 @@ export function BedroomViewport(props: Props) {
 
     let camera: THREE.Camera = perspective;
     let draggingId: string | null = null;
+    let dragAction: "move" | "rotate" | null = null;
+    let dragHistoryRecorded = false;
+    let dragStartX = 0;
+    let dragStartRotation = 0;
     let orbiting = false;
     let lastX = 0;
     let lastY = 0;
@@ -75,13 +82,7 @@ export function BedroomViewport(props: Props) {
     let distance = 9000;
 
     const clearWorld = () => {
-      world.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose();
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((entry) => entry.dispose());
-        }
-      });
+      disposeObjectTree(world);
       world.clear();
     };
 
@@ -187,13 +188,22 @@ export function BedroomViewport(props: Props) {
       const doorMaterial = new THREE.MeshStandardMaterial({ color: "#ad7c4e", roughness: 0.76, transparent: true, opacity: 0.82 });
       const frameMaterial = new THREE.MeshStandardMaterial({ color: "#6f6255", roughness: 0.82 });
       (current.room.doors ?? []).forEach((door) => {
-        const angle = THREE.MathUtils.degToRad(door.openAngle);
+        const angle = THREE.MathUtils.degToRad(door.isOpen === false ? door.closedAngle : door.openAngle);
         const endX = door.hinge.x + Math.cos(angle) * door.width;
         const endZ = door.hinge.z + Math.sin(angle) * door.width;
         const leaf = new THREE.Mesh(new THREE.BoxGeometry(door.width, 2100, 42), doorMaterial.clone());
         leaf.position.set((door.hinge.x + endX) / 2, 1050, (door.hinge.z + endZ) / 2);
         leaf.rotation.y = -angle;
+        leaf.userData.doorId = door.id;
         world.add(leaf);
+        const doorHitArea = new THREE.Mesh(
+          new THREE.BoxGeometry(door.width, 2100, 220),
+          new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        );
+        doorHitArea.position.copy(leaf.position);
+        doorHitArea.rotation.copy(leaf.rotation);
+        doorHitArea.userData.doorId = door.id;
+        world.add(doorHitArea);
         const openingEnds = door.wallAxis === "x"
           ? [{ x: door.wallCoordinate, z: door.openingStart }, { x: door.wallCoordinate, z: door.openingStart + door.width }]
           : [{ x: door.openingStart, z: door.wallCoordinate }, { x: door.openingStart + door.width, z: door.wallCoordinate }];
@@ -248,24 +258,35 @@ export function BedroomViewport(props: Props) {
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    const pick = (event: PointerEvent) => {
+    const pick = (event: PointerEvent): { kind: "furniture" | "door"; id: string } | null => {
       setPointer(event);
       raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects(world.children, true);
       for (const hit of hits) {
         let object: THREE.Object3D | null = hit.object;
-        while (object && !object.userData.furnitureId) object = object.parent;
-        if (object?.userData.furnitureId) return object.userData.furnitureId as string;
+        while (object && !object.userData.furnitureId && !object.userData.doorId) object = object.parent;
+        if (object?.userData.furnitureId) return { kind: "furniture", id: object.userData.furnitureId as string };
+        if (object?.userData.doorId) return { kind: "door", id: object.userData.doorId as string };
       }
       return null;
     };
     const onPointerDown = (event: PointerEvent) => {
       renderer.domElement.setPointerCapture(event.pointerId);
-      const id = pick(event);
-      if (id) {
-        draggingId = id;
-        propsRef.current.onSelect(id);
-        renderer.domElement.style.cursor = "grabbing";
+      const targetObject = pick(event);
+      if (targetObject?.kind === "door") {
+        propsRef.current.onSelect(null);
+        if (propsRef.current.interactionMode === "interact") propsRef.current.onToggleDoor(targetObject.id);
+        renderer.domElement.style.cursor = propsRef.current.interactionMode === "interact" ? "pointer" : "default";
+      } else if (targetObject?.kind === "furniture") {
+        propsRef.current.onSelect(targetObject.id);
+        if (propsRef.current.interactionMode === "move" || propsRef.current.interactionMode === "rotate") {
+          draggingId = targetObject.id;
+          dragAction = propsRef.current.interactionMode;
+          dragHistoryRecorded = false;
+          dragStartX = event.clientX;
+          dragStartRotation = propsRef.current.room.items.find((item) => item.id === targetObject.id)?.rotation ?? 0;
+          renderer.domElement.style.cursor = "grabbing";
+        }
       } else if (propsRef.current.viewMode === "perspective") {
         propsRef.current.onSelect(null);
         orbiting = true;
@@ -274,7 +295,7 @@ export function BedroomViewport(props: Props) {
       }
     };
     const onPointerMove = (event: PointerEvent) => {
-      if (draggingId) {
+      if (draggingId && dragAction === "move") {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
         if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
@@ -286,8 +307,13 @@ export function BedroomViewport(props: Props) {
           const depth = rotated ? item.size.width : item.size.depth;
           const x = Math.max(width / 2, Math.min(current.room.dimensions.width - width / 2, Math.round(hitPoint.x / current.snap) * current.snap));
           const z = Math.max(depth / 2, Math.min(current.room.dimensions.depth - depth / 2, Math.round(hitPoint.z / current.snap) * current.snap));
-          current.onChangeItem(draggingId, { position: { x, z } });
+          current.onChangeItem(draggingId, { position: { x, z } }, { recordHistory: !dragHistoryRecorded });
+          dragHistoryRecorded = true;
         }
+      } else if (draggingId && dragAction === "rotate") {
+        const rotation = Math.round((dragStartRotation + (event.clientX - dragStartX) * 0.6) / 5) * 5;
+        propsRef.current.onChangeItem(draggingId, { rotation: ((rotation % 360) + 360) % 360 }, { recordHistory: !dragHistoryRecorded });
+        dragHistoryRecorded = true;
       } else if (orbiting) {
         azimuth -= (event.clientX - lastX) * 0.008;
         elevation = Math.max(0.28, Math.min(1.35, elevation + (event.clientY - lastY) * 0.006));
@@ -295,11 +321,18 @@ export function BedroomViewport(props: Props) {
         lastY = event.clientY;
         updateCamera();
       } else {
-        renderer.domElement.style.cursor = pick(event) ? "grab" : propsRef.current.viewMode === "perspective" ? "move" : "default";
+        const targetObject = pick(event);
+        const mode = propsRef.current.interactionMode;
+        renderer.domElement.style.cursor = targetObject?.kind === "door"
+          ? mode === "interact" ? "pointer" : "default"
+          : targetObject?.kind === "furniture"
+            ? mode === "interact" ? "pointer" : mode === "move" ? "grab" : "ew-resize"
+            : propsRef.current.viewMode === "perspective" ? "move" : "default";
       }
     };
     const onPointerUp = (event: PointerEvent) => {
       draggingId = null;
+      dragAction = null;
       orbiting = false;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
       renderer.domElement.style.cursor = "default";
@@ -346,7 +379,7 @@ export function BedroomViewport(props: Props) {
   useEffect(() => {
     const host = hostRef.current as (HTMLDivElement & { __bedroomState?: ViewportState }) | null;
     host?.__bedroomState?.rebuild();
-  }, [props.room, props.selectedId, props.collisionIds, props.viewMode, props.showGrid, props.showWalls]);
+  }, [props.room, props.selectedId, props.collisionIds, props.viewMode, props.interactionMode, props.showGrid, props.showWalls]);
 
   if (webglUnavailable) {
     return <BedroomFallback2D {...props} />;
@@ -354,7 +387,7 @@ export function BedroomViewport(props: Props) {
   return <div ref={hostRef} className="three-viewport" aria-label={`${props.room.name}三维布局编辑画布`} />;
 }
 
-function BedroomFallback2D({ room, selectedId, collisionIds, onSelect }: Props) {
+function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, onSelect, onToggleDoor }: Props) {
   const pad = 280;
   const outline = room.outline.map((point) => `${point.x},${point.z}`).join(" ");
   const bay = room.bayWindow;
@@ -391,10 +424,12 @@ function BedroomFallback2D({ room, selectedId, collisionIds, onSelect }: Props) 
         {(room.doors ?? []).map((door) => {
           const closed = THREE.MathUtils.degToRad(door.closedAngle);
           const opened = THREE.MathUtils.degToRad(door.openAngle);
+          const leafAngle = THREE.MathUtils.degToRad(door.isOpen === false ? door.closedAngle : door.openAngle);
           const start = { x: door.hinge.x + Math.cos(closed) * door.width, z: door.hinge.z + Math.sin(closed) * door.width };
           const end = { x: door.hinge.x + Math.cos(opened) * door.width, z: door.hinge.z + Math.sin(opened) * door.width };
-          return <g key={door.id} className="fallback-door">
-            <path d={`M ${door.hinge.x} ${door.hinge.z} L ${end.x} ${end.z}`} />
+          const leafEnd = { x: door.hinge.x + Math.cos(leafAngle) * door.width, z: door.hinge.z + Math.sin(leafAngle) * door.width };
+          return <g key={door.id} className="fallback-door" role="button" tabIndex={0} onClick={() => { if (interactionMode === "interact") onToggleDoor(door.id); }} onKeyDown={(event) => { if (interactionMode === "interact" && (event.key === "Enter" || event.key === " ")) onToggleDoor(door.id); }}>
+            <path d={`M ${door.hinge.x} ${door.hinge.z} L ${leafEnd.x} ${leafEnd.z}`} />
             <path d={`M ${start.x} ${start.z} A ${door.width} ${door.width} 0 0 ${door.openAngle > door.closedAngle ? 1 : 0} ${end.x} ${end.z}`} fill="none" strokeDasharray="30 22" />
           </g>;
         })}

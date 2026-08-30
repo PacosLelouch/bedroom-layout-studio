@@ -19,8 +19,8 @@ export const INITIAL_ROOMS: RoomLayout[] = [
       { id: "master-entry-door", label: "入户门开启区 R900", x: 0, z: 900, width: 900, depth: 900, kind: "door" },
     ],
     doors: [
-      { id: "master-entry", label: "主卧门 W900", hinge: { x: 0, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 0, openingStart: 900, closedAngle: 90, openAngle: 0 },
-      { id: "master-ensuite", label: "套卫门 W900", hinge: { x: 982, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 982, openingStart: 900, closedAngle: 90, openAngle: 0 },
+      { id: "master-entry", label: "主卧门 W900", hinge: { x: 0, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 0, openingStart: 900, closedAngle: 90, openAngle: 0, isOpen: true },
+      { id: "master-ensuite", label: "套卫门 W900", hinge: { x: 982, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 982, openingStart: 900, closedAngle: 90, openAngle: 0, isOpen: true },
     ],
     bayWindow: { side: "bottom", start: 0, length: 3001, depth: 650, sillHeight: 600 },
     items: [
@@ -28,6 +28,7 @@ export const INITIAL_ROOMS: RoomLayout[] = [
       { id: "master-wardrobe", assetId: "sliding-wardrobe", name: "推拉门衣柜", position: { x: 1800, z: 2372 }, rotation: 0, size: { width: 1800, depth: 650, height: 2400 }, color: "#c8b696", clearanceDepth: 200, clearanceLabel: "推拉门操作区 200" },
       { id: "master-vanity", assetId: "vanity", name: "飘窗梳妆台", position: { x: 2476, z: 4930 }, rotation: 0, size: { width: 1050, depth: 450, height: 750 }, color: "#aa8b69" },
       { id: "master-stool", assetId: "stool", name: "梳妆凳", position: { x: 2200, z: 4400 }, rotation: 0, size: { width: 420, depth: 420, height: 450 }, color: "#b97968" },
+      { id: "master-entry-cabinet", assetId: "entry-cabinet", name: "入户收纳薄柜", position: { x: 550, z: 175 }, rotation: 0, size: { width: 800, depth: 350, height: 2200 }, color: "#bda989" },
     ],
   },
   {
@@ -41,7 +42,7 @@ export const INITIAL_ROOMS: RoomLayout[] = [
       { id: "large-entry-door", label: "房门开启区 R900", x: 0, z: 0, width: 900, depth: 900, kind: "door" },
     ],
     doors: [
-      { id: "large-entry", label: "房门 W900", hinge: { x: 900, z: 0 }, width: 900, wallAxis: "z", wallCoordinate: 0, openingStart: 0, closedAngle: 180, openAngle: 90 },
+      { id: "large-entry", label: "房门 W900", hinge: { x: 900, z: 0 }, width: 900, wallAxis: "z", wallCoordinate: 0, openingStart: 0, closedAngle: 180, openAngle: 90, isOpen: true },
     ],
     bayWindow: { side: "bottom", start: 0, length: 2716, depth: 650, sillHeight: 600 },
     items: [
@@ -62,7 +63,7 @@ export const INITIAL_ROOMS: RoomLayout[] = [
       { id: "small-entry-door", label: "房门开启区 R900", x: 1816, z: 1613, width: 900, depth: 900, kind: "door" },
     ],
     doors: [
-      { id: "small-entry", label: "房门 W900", hinge: { x: 2716, z: 2513 }, width: 900, wallAxis: "z", wallCoordinate: 2513, openingStart: 1816, closedAngle: 180, openAngle: 270 },
+      { id: "small-entry", label: "房门 W900", hinge: { x: 2716, z: 2513 }, width: 900, wallAxis: "z", wallCoordinate: 2513, openingStart: 1816, closedAngle: 180, openAngle: 270, isOpen: true },
     ],
     bayWindow: { side: "right", start: 0, length: 1500, depth: 650, sillHeight: 600 },
     items: [

@@ -1,4 +1,5 @@
 export type ViewMode = "top" | "perspective";
+export type InteractionMode = "interact" | "move" | "rotate";
 
 export interface Dimensions3D {
   width: number;
@@ -52,6 +53,7 @@ export interface DoorOpening {
   openingStart: number;
   closedAngle: number;
   openAngle: number;
+  isOpen?: boolean;
 }
 
 export interface RoomLayout {
