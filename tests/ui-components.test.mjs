@@ -83,3 +83,44 @@ test("renders sidebar skeletons deterministically", async () => {
   assert.equal(first, second);
   assert.match(first, /--skeleton-width:70%/);
 });
+
+test("keeps candidate img2threejs assets out of the furniture catalog", async () => {
+  const registry = await vite.ssrLoadModule("/lib/bedroom/generated/registry.ts");
+  const catalog = await vite.ssrLoadModule("/lib/bedroom/asset-registry.ts");
+
+  const crownChest = registry.findGeneratedAsset("crown-chest");
+  assert.equal(crownChest.effectiveStatus, "candidate");
+  assert.equal(catalog.ASSET_CATALOG.some((asset) => asset.id === "crown-chest"), false);
+});
+
+test("adapts a real img2threejs factory to Y-up ground-centered review space", async () => {
+  const THREE = await import("three");
+  const registry = await vite.ssrLoadModule("/lib/bedroom/generated/registry.ts");
+  const adapter = await vite.ssrLoadModule("/lib/bedroom/generated/model-adapter.ts");
+  const disposal = await vite.ssrLoadModule("/lib/bedroom/three-disposal.ts");
+  const crownChest = registry.findGeneratedAsset("crown-chest");
+
+  const preview = adapter.createAdaptedGeneratedModel(crownChest.factory, null);
+  const bounds = new THREE.Box3().setFromObject(preview.group);
+  const center = bounds.getCenter(new THREE.Vector3());
+  assert.ok(Math.abs(bounds.min.y) < 0.001);
+  assert.ok(Math.abs(center.x) < 0.001);
+  assert.ok(Math.abs(center.z) < 0.001);
+  assert.equal(preview.report.aspectCompatible, true);
+  disposal.disposeObjectTree(preview.group);
+});
+
+test("rejects dimensions whose proportions differ by more than five percent", async () => {
+  const registry = await vite.ssrLoadModule("/lib/bedroom/generated/registry.ts");
+  const adapter = await vite.ssrLoadModule("/lib/bedroom/generated/model-adapter.ts");
+  const crownChest = registry.findGeneratedAsset("crown-chest");
+
+  assert.throws(
+    () => adapter.createAdaptedGeneratedModel(
+      crownChest.factory,
+      { width: 1000, depth: 1000, height: 1000 },
+      { strict: true },
+    ),
+    /超过 5%/,
+  );
+});
