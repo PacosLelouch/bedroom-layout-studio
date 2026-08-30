@@ -19,6 +19,7 @@ interface Props {
   onSelect: (id: string | null) => void;
   onChangeItem: (id: string, patch: Partial<FurnitureItem>, options?: { recordHistory?: boolean }) => void;
   onToggleDoor: (id: string) => void;
+  onInteractItem: (id: string) => void;
 }
 
 type ViewportState = { rebuild: () => void };
@@ -226,12 +227,13 @@ export function BedroomViewport(props: Props) {
         const group = createAssetGroup(item);
         group.position.set(item.position.x, item.wallMounted ? 1450 : 0, item.position.z);
         group.rotation.y = THREE.MathUtils.degToRad(item.rotation);
+        world.add(group);
         if (current.selectedId === item.id || current.collisionIds.has(item.id)) {
+          group.updateWorldMatrix(true, true);
           const helper = new THREE.BoxHelper(group, current.collisionIds.has(item.id) ? "#dc6549" : "#d89439");
           helper.userData.decorative = true;
-          group.add(helper);
+          world.add(helper);
         }
-        world.add(group);
         const clearance = clearanceRect(item);
         if (clearance) {
           const marker = new THREE.Mesh(
@@ -279,6 +281,7 @@ export function BedroomViewport(props: Props) {
         renderer.domElement.style.cursor = propsRef.current.interactionMode === "interact" ? "pointer" : "default";
       } else if (targetObject?.kind === "furniture") {
         propsRef.current.onSelect(targetObject.id);
+        if (propsRef.current.interactionMode === "interact") propsRef.current.onInteractItem(targetObject.id);
         if (propsRef.current.interactionMode === "move" || propsRef.current.interactionMode === "rotate") {
           draggingId = targetObject.id;
           dragAction = propsRef.current.interactionMode;
@@ -387,7 +390,7 @@ export function BedroomViewport(props: Props) {
   return <div ref={hostRef} className="three-viewport" aria-label={`${props.room.name}三维布局编辑画布`} />;
 }
 
-function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, onSelect, onToggleDoor }: Props) {
+function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, onSelect, onToggleDoor, onInteractItem }: Props) {
   const pad = 280;
   const outline = room.outline.map((point) => `${point.x},${point.z}`).join(" ");
   const bay = room.bayWindow;
@@ -443,7 +446,7 @@ function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, on
           const depth = rotated ? item.size.width : item.size.depth;
           const warning = collisionIds.has(item.id);
           return (
-            <g key={item.id} onClick={() => onSelect(item.id)} className="fallback-item" role="button">
+            <g key={item.id} onClick={() => { onSelect(item.id); if (interactionMode === "interact") onInteractItem(item.id); }} className="fallback-item" role="button">
               <rect
                 x={item.position.x - width / 2}
                 y={item.position.z - depth / 2}

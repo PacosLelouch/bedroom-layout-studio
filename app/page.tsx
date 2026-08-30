@@ -90,6 +90,22 @@ export default function Home() {
       ...entry, doors: entry.doors.map((door) => door.id === doorId ? { ...door, isOpen: door.isOpen === false } : door),
     }));
   }, [applyRooms, roomId]);
+  const interactItem = useCallback((itemId: string) => {
+    applyRooms((current) => current.map((entry) => entry.id !== roomId ? entry : {
+      ...entry,
+      items: entry.items.map((item) => {
+        if (item.id !== itemId || !item.interactionState) return item;
+        const opening = item.interactionState !== "open";
+        if (item.assetId !== "sofa-bed") return { ...item, interactionState: opening ? "open" : "closed" };
+        return {
+          ...item,
+          interactionState: opening ? "open" : "closed",
+          position: { ...item.position, z: opening ? item.expandedPositionZ ?? item.position.z : item.collapsedPositionZ ?? item.position.z },
+          size: { ...item.size, depth: opening ? item.expandedDepth ?? 2000 : item.collapsedDepth ?? 850 },
+        };
+      }),
+    }));
+  }, [applyRooms, roomId]);
   const addItem = (assetId: string) => {
     const item = catalogItemToFurniture(assetId, room);
     applyRooms((current) => current.map((entry) => entry.id === roomId ? { ...entry, items: [...entry.items, item] } : entry));
@@ -170,7 +186,7 @@ export default function Home() {
           </div>
           <BedroomViewport room={room} selectedId={selectedId} collisionIds={collisionIds}
             viewMode={viewMode} interactionMode={interactionMode} snap={snap} showGrid={showGrid} showWalls={showWalls}
-            onSelect={setSelectedId} onChangeItem={updateItem} onToggleDoor={toggleDoor} />
+            onSelect={setSelectedId} onChangeItem={updateItem} onToggleDoor={toggleDoor} onInteractItem={interactItem} />
           {showReference && <aside className="plan-reference no-scrollbar" aria-label={`${room.name}标尺原图`}>
             <div className="plan-reference-heading"><span><strong>{room.name}标尺原图</strong><small>SVG · 尺寸权威来源</small></span><button onClick={() => setShowReference(false)} aria-label="关闭标尺原图"><X size={15} /></button></div>
             <Image src={room.planSrc} alt={`${room.name}建筑标尺图`} width={1200} height={1300} unoptimized />
@@ -211,6 +227,10 @@ export default function Home() {
                 onClick={() => updateItem(selected.id, { rotation: angle })}>{angle}°</button>)}
             </div></PropertySection>
             {selected.clearanceDepth && <div className="clearance-card"><strong>{selected.clearanceLabel}</strong><span>柜体深 {selected.size.depth} mm；斜线区域必须保持空置。</span></div>}
+            {selected.interactionState && <button className="interaction-state-card" onClick={() => interactItem(selected.id)}>
+              <strong>{selected.interactionState === "open" ? "当前：已展开" : "当前：已收起"}</strong>
+              <span>{selected.assetId === "sofa-bed" ? "切换沙发 / 床形态" : "点击切换柜门并查看柜内空间"}</span>
+            </button>}
             {selected.wallMounted && <div className="clearance-card neutral"><strong>墙面安装</strong><span>吊柜不占用地面通行空间，建议底沿离地 1450–1550 mm。</span></div>}
             {collisionIds.has(selected.id) && <div className="warning-card"><strong>检测到空间冲突</strong><span>家具重叠或超出房间边界，请调整后再保存。</span></div>}
           </> : <div className="empty-inspector"><MousePointer2 size={28} /><strong>选择一件家具</strong><span>点击场景内的对象查看并编辑尺寸。</span></div>}

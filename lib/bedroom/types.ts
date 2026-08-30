@@ -18,6 +18,11 @@ export interface FurnitureItem {
   wallMounted?: boolean;
   clearanceDepth?: number;
   clearanceLabel?: string;
+  interactionState?: "open" | "closed";
+  collapsedDepth?: number;
+  expandedDepth?: number;
+  collapsedPositionZ?: number;
+  expandedPositionZ?: number;
 }
 
 export interface PlanPoint {
