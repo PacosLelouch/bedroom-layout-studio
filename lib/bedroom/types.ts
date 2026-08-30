@@ -42,6 +42,18 @@ export interface BayWindow {
   sillHeight: number;
 }
 
+export interface DoorOpening {
+  id: string;
+  label: string;
+  hinge: PlanPoint;
+  width: number;
+  wallAxis: "x" | "z";
+  wallCoordinate: number;
+  openingStart: number;
+  closedAngle: number;
+  openAngle: number;
+}
+
 export interface RoomLayout {
   id: string;
   name: string;
@@ -50,6 +62,7 @@ export interface RoomLayout {
   planSrc: string;
   outline: PlanPoint[];
   keepOutZones: KeepOutZone[];
+  doors: DoorOpening[];
   bayWindow: BayWindow;
   items: FurnitureItem[];
 }

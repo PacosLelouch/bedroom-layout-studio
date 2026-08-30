@@ -34,7 +34,6 @@ export function BedroomViewport(props: Props) {
     if (!host) return;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#e9e6df");
-    scene.fog = new THREE.Fog("#e9e6df", 7800, 12000);
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -44,11 +43,11 @@ export function BedroomViewport(props: Props) {
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.appendChild(renderer.domElement);
 
-    const perspective = new THREE.PerspectiveCamera(38, 1, 10, 30000);
+    const perspective = new THREE.PerspectiveCamera(42, 1, 10, 50000);
     const orthographic = new THREE.OrthographicCamera(-3000, 3000, 2200, -2200, 10, 30000);
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -71,9 +70,9 @@ export function BedroomViewport(props: Props) {
     let orbiting = false;
     let lastX = 0;
     let lastY = 0;
-    let azimuth = -0.72;
-    let elevation = 0.9;
-    let distance = 7200;
+    let azimuth = 0.72;
+    let elevation = 0.76;
+    let distance = 9000;
 
     const clearWorld = () => {
       world.traverse((object) => {
@@ -132,16 +131,39 @@ export function BedroomViewport(props: Props) {
         world.add(grid);
       }
       if (current.showWalls) {
-        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.74 });
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide });
+        const addWall = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+          const length = Math.hypot(b.x - a.x, b.z - a.z);
+          if (length < 1) return;
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(length, height, 80), wallMaterial.clone());
+          wall.position.set((a.x + b.x) / 2, height / 2, (a.z + b.z) / 2);
+          wall.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+          wall.receiveShadow = true;
+          world.add(wall);
+        };
         current.room.outline.forEach((point, index) => {
           const next = current.room.outline[(index + 1) % current.room.outline.length];
           if ((point.x === width && next.x === width) || (point.z === depth && next.z === depth)) return;
-          const length = Math.hypot(next.x - point.x, next.z - point.z);
-          const wall = new THREE.Mesh(new THREE.BoxGeometry(length, height, 110), wallMaterial.clone());
-          wall.position.set((point.x + next.x) / 2, height / 2, (point.z + next.z) / 2);
-          wall.rotation.y = -Math.atan2(next.z - point.z, next.x - point.x);
-          wall.receiveShadow = true;
-          world.add(wall);
+          const horizontal = point.z === next.z;
+          const axis = horizontal ? "z" : "x";
+          const coordinate = horizontal ? point.z : point.x;
+          const start = Math.min(horizontal ? point.x : point.z, horizontal ? next.x : next.z);
+          const end = Math.max(horizontal ? point.x : point.z, horizontal ? next.x : next.z);
+          let spans: Array<[number, number]> = [[start, end]];
+          (current.room.doors ?? []).filter((door) => door.wallAxis === axis && door.wallCoordinate === coordinate).forEach((door) => {
+            const openingEnd = door.openingStart + door.width;
+            spans = spans.flatMap(([from, to]) => {
+              if (openingEnd <= from || door.openingStart >= to) return [[from, to]];
+              const pieces: Array<[number, number]> = [];
+              if (door.openingStart > from) pieces.push([from, door.openingStart]);
+              if (openingEnd < to) pieces.push([openingEnd, to]);
+              return pieces;
+            });
+          });
+          spans.forEach(([from, to]) => addWall(
+            horizontal ? { x: from, z: coordinate } : { x: coordinate, z: from },
+            horizontal ? { x: to, z: coordinate } : { x: coordinate, z: to },
+          ));
         });
       }
       const bay = current.room.bayWindow;
@@ -161,6 +183,34 @@ export function BedroomViewport(props: Props) {
         marker.rotation.x = -Math.PI / 2;
         marker.position.set(zone.x + zone.width / 2, 5, zone.z + zone.depth / 2);
         world.add(marker);
+      });
+      const doorMaterial = new THREE.MeshStandardMaterial({ color: "#ad7c4e", roughness: 0.76, transparent: true, opacity: 0.82 });
+      const frameMaterial = new THREE.MeshStandardMaterial({ color: "#6f6255", roughness: 0.82 });
+      (current.room.doors ?? []).forEach((door) => {
+        const angle = THREE.MathUtils.degToRad(door.openAngle);
+        const endX = door.hinge.x + Math.cos(angle) * door.width;
+        const endZ = door.hinge.z + Math.sin(angle) * door.width;
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(door.width, 2100, 42), doorMaterial.clone());
+        leaf.position.set((door.hinge.x + endX) / 2, 1050, (door.hinge.z + endZ) / 2);
+        leaf.rotation.y = -angle;
+        world.add(leaf);
+        const openingEnds = door.wallAxis === "x"
+          ? [{ x: door.wallCoordinate, z: door.openingStart }, { x: door.wallCoordinate, z: door.openingStart + door.width }]
+          : [{ x: door.openingStart, z: door.wallCoordinate }, { x: door.openingStart + door.width, z: door.wallCoordinate }];
+        openingEnds.forEach((point) => {
+          const jamb = new THREE.Mesh(new THREE.BoxGeometry(70, 2150, 70), frameMaterial.clone());
+          jamb.position.set(point.x, 1075, point.z);
+          world.add(jamb);
+        });
+        const arcPoints: THREE.Vector3[] = [];
+        for (let step = 0; step <= 18; step += 1) {
+          const arcAngle = THREE.MathUtils.degToRad(door.closedAngle + (door.openAngle - door.closedAngle) * step / 18);
+          arcPoints.push(new THREE.Vector3(door.hinge.x + Math.cos(arcAngle) * door.width, 9, door.hinge.z + Math.sin(arcAngle) * door.width));
+        }
+        world.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(arcPoints),
+          new THREE.LineBasicMaterial({ color: "#a56838", transparent: true, opacity: 0.9 }),
+        ));
       });
       for (const item of current.room.items) {
         const group = createAssetGroup(item);
@@ -257,7 +307,7 @@ export function BedroomViewport(props: Props) {
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       if (propsRef.current.viewMode === "perspective") {
-        distance = Math.max(3800, Math.min(12000, distance + event.deltaY * 4));
+        distance = Math.max(4200, Math.min(18000, distance + event.deltaY * 5));
       } else {
         orthographic.zoom = Math.max(0.55, Math.min(2.4, orthographic.zoom * (event.deltaY > 0 ? 0.92 : 1.08)));
         orthographic.updateProjectionMatrix();
@@ -338,6 +388,16 @@ function BedroomFallback2D({ room, selectedId, collisionIds, onSelect }: Props) 
           <rect x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#df8d55" fillOpacity=".18" stroke="#cf7846" strokeWidth="14" strokeDasharray="46 30" />
           <text x={zone.x + zone.width / 2} y={zone.z + zone.depth / 2} textAnchor="middle" className="fallback-zone-label">{zone.label}</text>
         </g>)}
+        {(room.doors ?? []).map((door) => {
+          const closed = THREE.MathUtils.degToRad(door.closedAngle);
+          const opened = THREE.MathUtils.degToRad(door.openAngle);
+          const start = { x: door.hinge.x + Math.cos(closed) * door.width, z: door.hinge.z + Math.sin(closed) * door.width };
+          const end = { x: door.hinge.x + Math.cos(opened) * door.width, z: door.hinge.z + Math.sin(opened) * door.width };
+          return <g key={door.id} className="fallback-door">
+            <path d={`M ${door.hinge.x} ${door.hinge.z} L ${end.x} ${end.z}`} />
+            <path d={`M ${start.x} ${start.z} A ${door.width} ${door.width} 0 0 ${door.openAngle > door.closedAngle ? 1 : 0} ${end.x} ${end.z}`} fill="none" strokeDasharray="30 22" />
+          </g>;
+        })}
         {room.items.map((item) => {
           const zone = clearanceRect(item);
           return zone ? <rect key={`${item.id}-clearance`} x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#d8a24d" fillOpacity=".2" stroke="#c58a2d" strokeWidth="12" strokeDasharray="36 24" /> : null;

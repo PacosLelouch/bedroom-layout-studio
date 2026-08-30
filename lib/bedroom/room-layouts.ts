@@ -18,6 +18,10 @@ export const INITIAL_ROOMS: RoomLayout[] = [
     keepOutZones: [
       { id: "master-entry-door", label: "入户门开启区 R900", x: 0, z: 900, width: 900, depth: 900, kind: "door" },
     ],
+    doors: [
+      { id: "master-entry", label: "主卧门 W900", hinge: { x: 0, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 0, openingStart: 900, closedAngle: 90, openAngle: 0 },
+      { id: "master-ensuite", label: "套卫门 W900", hinge: { x: 982, z: 900 }, width: 900, wallAxis: "x", wallCoordinate: 982, openingStart: 900, closedAngle: 90, openAngle: 0 },
+    ],
     bayWindow: { side: "bottom", start: 0, length: 3001, depth: 650, sillHeight: 600 },
     items: [
       { id: "master-bed", assetId: "double-bed", name: "1800 双人床", position: { x: 900, z: 4000 }, rotation: 0, size: { width: 1800, depth: 2100, height: 520 }, color: "#d9cbb9" },
@@ -36,6 +40,9 @@ export const INITIAL_ROOMS: RoomLayout[] = [
     keepOutZones: [
       { id: "large-entry-door", label: "房门开启区 R900", x: 0, z: 0, width: 900, depth: 900, kind: "door" },
     ],
+    doors: [
+      { id: "large-entry", label: "房门 W900", hinge: { x: 900, z: 0 }, width: 900, wallAxis: "z", wallCoordinate: 0, openingStart: 0, closedAngle: 180, openAngle: 90 },
+    ],
     bayWindow: { side: "bottom", start: 0, length: 2716, depth: 650, sillHeight: 600 },
     items: [
       { id: "large-bed", assetId: "queen-bed", name: "1500 双人床", position: { x: 750, z: 2054 }, rotation: 0, size: { width: 1500, depth: 2000, height: 520 }, color: "#b8c8bf" },
@@ -53,6 +60,9 @@ export const INITIAL_ROOMS: RoomLayout[] = [
     outline: [{ x: 0, z: 0 }, { x: 2716, z: 0 }, { x: 2716, z: 2513 }, { x: 0, z: 2513 }],
     keepOutZones: [
       { id: "small-entry-door", label: "房门开启区 R900", x: 1816, z: 1613, width: 900, depth: 900, kind: "door" },
+    ],
+    doors: [
+      { id: "small-entry", label: "房门 W900", hinge: { x: 2716, z: 2513 }, width: 900, wallAxis: "z", wallCoordinate: 2513, openingStart: 1816, closedAngle: 180, openAngle: 270 },
     ],
     bayWindow: { side: "right", start: 0, length: 1500, depth: 650, sillHeight: 600 },
     items: [
