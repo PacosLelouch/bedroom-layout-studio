@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1000" viewBox="0 0 830 670">
+  <defs>
+    <marker id="tick" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1,7 L7,1" stroke="#64748b" stroke-width="1.2"/></marker>
+    <style>
+      .title{font:700 24px 'Arial',sans-serif;fill:#172033}.sub{font:13px 'Arial',sans-serif;fill:#64748b}.label{font:700 22px 'Arial',sans-serif;fill:#263142;text-anchor:middle}.area{font:15px 'Arial',sans-serif;fill:#516071;text-anchor:middle}.wall{fill:#33363a}.floor{fill:#f5ead6}.bay{fill:#d8dee5;stroke:#697480;stroke-width:2}.win{stroke:#697480;stroke-width:2;fill:none}.door{stroke:#566270;stroke-width:2.2;fill:none}.dim{stroke:#64748b;stroke-width:1.2;fill:none;marker-start:url(#tick);marker-end:url(#tick)}.ext{stroke:#94a3b8;stroke-width:1}.dt{font:13px 'Arial',sans-serif;fill:#3d4a5c;text-anchor:middle}.note{font:12px 'Arial',sans-serif;fill:#526174}.thin{stroke:#d7cbb8;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="830" height="670" fill="#fff"/>
+  <text x="52" y="48" class="title">BEDROOM 2 · DIMENSIONED PLAN</text>
+  <text x="52" y="72" class="sub">Clear dimensions in millimetres · door R=900 · bay window 1500 × D650 / sill H=600 mm</text>
+
+  <!-- room clear area: 2716 x 2513 -->
+  <rect x="210" y="142" width="435" height="402" class="floor"/>
+  <path d="M210 142H645V544H210Z" class="thin" fill="none"/>
+  <!-- walls, with bottom-right door opening and right-side bay-window opening -->
+  <rect x="180" y="112" width="495" height="30" class="wall"/>
+  <rect x="180" y="142" width="30" height="432" class="wall"/>
+  <rect x="180" y="544" width="321" height="30" class="wall"/>
+  <rect x="645" y="382" width="30" height="192" class="wall"/>
+  <rect x="501" y="544" width="144" height="30" fill="#f5ead6"/>
+
+  <!-- bay window: right side, restored from source plan -->
+  <rect x="645" y="142" width="104" height="240" rx="2" class="bay"/>
+  <path d="M660 150V374M734 150V374" class="win"/>
+  <text x="697" y="262" class="note" text-anchor="middle" transform="rotate(90 697 262)">BAY WINDOW · D=650 · H=600</text>
+  <path d="M645 142V92M749 142V92" class="ext"/>
+  <path d="M645 101H749" class="dim"/>
+  <text x="697" y="94" class="dt">650</text>
+  <path d="M749 142H805M749 382H805" class="ext"/>
+  <path d="M796 142V382" class="dim"/>
+  <text x="804" y="262" class="dt" transform="rotate(-90 804 262)">1500</text>
+
+  <!-- inward-opening door: exact leaf/swing radius 900 mm -->
+  <path d="M501 544H645M645 544V400M501 544A144 144 0 0 1 645 400" class="door"/>
+  <text x="576" y="438" class="note" text-anchor="middle">R=900</text>
+  <path d="M501 544V598M645 544V598" class="ext"/>
+  <path d="M501 590H645" class="dim"/>
+  <text x="573" y="583" class="dt">900</text>
+
+  <text x="427.5" y="325" class="label">BEDROOM 2</text>
+  <text x="427.5" y="349" class="area">6.82 m²</text>
+
+  <!-- dimensions -->
+  <path d="M210 142V92M645 142V92" class="ext"/>
+  <path d="M210 101H645" class="dim"/>
+  <text x="427.5" y="94" class="dt">2716</text>
+
+  <path d="M210 142H145M210 544H145" class="ext"/>
+  <path d="M154 142V544" class="dim"/>
+  <text x="146" y="343" class="dt" transform="rotate(-90 146 343)">2513</text>
+
+  <path d="M210 544V616M645 544V616" class="ext"/>
+  <path d="M210 607H645" class="dim"/>
+  <text x="427.5" y="600" class="dt">2716</text>
+
+  <text x="52" y="645" class="note">Note: door W/R=900 mm; bay window length=1500 mm, D=650 mm and sill H=600 mm.</text>
+</svg>

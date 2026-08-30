@@ -1,0 +1,369 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { createAssetGroup } from "@/lib/bedroom/asset-registry";
+import { clearanceRect } from "@/lib/bedroom/geometry";
+import type { FurnitureItem, RoomLayout, ViewMode } from "@/lib/bedroom/types";
+
+interface Props {
+  room: RoomLayout;
+  selectedId: string | null;
+  collisionIds: Set<string>;
+  viewMode: ViewMode;
+  snap: number;
+  showGrid: boolean;
+  showWalls: boolean;
+  onSelect: (id: string | null) => void;
+  onChangeItem: (id: string, patch: Partial<FurnitureItem>) => void;
+}
+
+type ViewportState = { rebuild: () => void };
+
+export function BedroomViewport(props: Props) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const propsRef = useRef(props);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
+
+  useEffect(() => {
+    propsRef.current = props;
+  });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#e9e6df");
+    scene.fog = new THREE.Fog("#e9e6df", 7800, 12000);
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    } catch {
+      const fallbackTimer = window.setTimeout(() => setWebglUnavailable(true), 0);
+      return () => window.clearTimeout(fallbackTimer);
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.appendChild(renderer.domElement);
+
+    const perspective = new THREE.PerspectiveCamera(38, 1, 10, 30000);
+    const orthographic = new THREE.OrthographicCamera(-3000, 3000, 2200, -2200, 10, 30000);
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const target = new THREE.Vector3();
+    const world = new THREE.Group();
+    scene.add(world);
+    scene.add(new THREE.HemisphereLight("#fffdf4", "#9c9284", 2.1));
+    const sun = new THREE.DirectionalLight("#fff4dc", 3.1);
+    sun.position.set(-2400, 5200, 2600);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -5000;
+    sun.shadow.camera.right = sun.shadow.camera.top = 5000;
+    scene.add(sun);
+
+    let camera: THREE.Camera = perspective;
+    let draggingId: string | null = null;
+    let orbiting = false;
+    let lastX = 0;
+    let lastY = 0;
+    let azimuth = -0.72;
+    let elevation = 0.9;
+    let distance = 7200;
+
+    const clearWorld = () => {
+      world.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((entry) => entry.dispose());
+        }
+      });
+      world.clear();
+    };
+
+    const updateCamera = () => {
+      const current = propsRef.current;
+      const { width, depth } = current.room.dimensions;
+      target.set(width / 2, 0, depth / 2);
+      if (current.viewMode === "top") {
+        camera = orthographic;
+        const span = Math.max(width, depth) * 0.72;
+        const aspect = Math.max(0.5, host.clientWidth / Math.max(1, host.clientHeight));
+        orthographic.left = -span * aspect;
+        orthographic.right = span * aspect;
+        orthographic.top = span;
+        orthographic.bottom = -span;
+        orthographic.position.set(width / 2, 10000, depth / 2);
+        orthographic.up.set(0, 0, -1);
+        orthographic.lookAt(target);
+        orthographic.updateProjectionMatrix();
+      } else {
+        camera = perspective;
+        const horizontal = distance * Math.cos(elevation);
+        perspective.position.set(target.x + horizontal * Math.sin(azimuth), distance * Math.sin(elevation), target.z + horizontal * Math.cos(azimuth));
+        perspective.lookAt(target.x, 400, target.z);
+        perspective.updateProjectionMatrix();
+      }
+    };
+
+    const rebuild = () => {
+      clearWorld();
+      const current = propsRef.current;
+      const { width, depth, height } = current.room.dimensions;
+      const floorMaterial = new THREE.MeshStandardMaterial({ color: "#f8f5ed", roughness: 0.86 });
+      const floorShape = new THREE.Shape();
+      current.room.outline.forEach((point, index) => index === 0 ? floorShape.moveTo(point.x, point.z) : floorShape.lineTo(point.x, point.z));
+      floorShape.closePath();
+      const floorGeometry = new THREE.ExtrudeGeometry(floorShape, { depth: 70, bevelEnabled: false });
+      floorGeometry.rotateX(Math.PI / 2);
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.receiveShadow = true;
+      world.add(floor);
+      if (current.showGrid) {
+        const grid = new THREE.GridHelper(Math.max(width, depth) * 1.5, Math.ceil(Math.max(width, depth) / 200), "#aaa49a", "#d3cec5");
+        grid.position.set(width / 2, 4, depth / 2);
+        grid.material.opacity = 0.52;
+        grid.material.transparent = true;
+        world.add(grid);
+      }
+      if (current.showWalls) {
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.74 });
+        current.room.outline.forEach((point, index) => {
+          const next = current.room.outline[(index + 1) % current.room.outline.length];
+          if ((point.x === width && next.x === width) || (point.z === depth && next.z === depth)) return;
+          const length = Math.hypot(next.x - point.x, next.z - point.z);
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(length, height, 110), wallMaterial.clone());
+          wall.position.set((point.x + next.x) / 2, height / 2, (point.z + next.z) / 2);
+          wall.rotation.y = -Math.atan2(next.z - point.z, next.x - point.x);
+          wall.receiveShadow = true;
+          world.add(wall);
+        });
+      }
+      const bay = current.room.bayWindow;
+      const bayGeometry = bay.side === "bottom"
+        ? new THREE.BoxGeometry(bay.length, bay.sillHeight, bay.depth)
+        : new THREE.BoxGeometry(bay.depth, bay.sillHeight, bay.length);
+      const bayMesh = new THREE.Mesh(bayGeometry, new THREE.MeshStandardMaterial({ color: "#cbd4dc", roughness: 0.76, transparent: true, opacity: 0.78 }));
+      bayMesh.position.set(
+        bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth / 2,
+        bay.sillHeight / 2,
+        bay.side === "bottom" ? depth + bay.depth / 2 : bay.start + bay.length / 2,
+      );
+      world.add(bayMesh);
+      const zoneMaterial = new THREE.MeshBasicMaterial({ color: "#df8d55", transparent: true, opacity: 0.18, depthWrite: false });
+      current.room.keepOutZones.forEach((zone) => {
+        const marker = new THREE.Mesh(new THREE.PlaneGeometry(zone.width, zone.depth), zoneMaterial.clone());
+        marker.rotation.x = -Math.PI / 2;
+        marker.position.set(zone.x + zone.width / 2, 5, zone.z + zone.depth / 2);
+        world.add(marker);
+      });
+      for (const item of current.room.items) {
+        const group = createAssetGroup(item);
+        group.position.set(item.position.x, item.wallMounted ? 1450 : 0, item.position.z);
+        group.rotation.y = THREE.MathUtils.degToRad(item.rotation);
+        if (current.selectedId === item.id || current.collisionIds.has(item.id)) {
+          const helper = new THREE.BoxHelper(group, current.collisionIds.has(item.id) ? "#dc6549" : "#d89439");
+          helper.userData.decorative = true;
+          group.add(helper);
+        }
+        world.add(group);
+        const clearance = clearanceRect(item);
+        if (clearance) {
+          const marker = new THREE.Mesh(
+            new THREE.PlaneGeometry(clearance.width, clearance.depth),
+            new THREE.MeshBasicMaterial({ color: "#d8a24d", transparent: true, opacity: 0.22, depthWrite: false }),
+          );
+          marker.rotation.x = -Math.PI / 2;
+          marker.position.set(clearance.x + clearance.width / 2, 6, clearance.z + clearance.depth / 2);
+          world.add(marker);
+        }
+      }
+      updateCamera();
+    };
+
+    const resize = () => {
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      renderer.setSize(width, height, false);
+      perspective.aspect = width / Math.max(1, height);
+      updateCamera();
+    };
+    const setPointer = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    };
+    const pick = (event: PointerEvent) => {
+      setPointer(event);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(world.children, true);
+      for (const hit of hits) {
+        let object: THREE.Object3D | null = hit.object;
+        while (object && !object.userData.furnitureId) object = object.parent;
+        if (object?.userData.furnitureId) return object.userData.furnitureId as string;
+      }
+      return null;
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      renderer.domElement.setPointerCapture(event.pointerId);
+      const id = pick(event);
+      if (id) {
+        draggingId = id;
+        propsRef.current.onSelect(id);
+        renderer.domElement.style.cursor = "grabbing";
+      } else if (propsRef.current.viewMode === "perspective") {
+        propsRef.current.onSelect(null);
+        orbiting = true;
+        lastX = event.clientX;
+        lastY = event.clientY;
+      }
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (draggingId) {
+        setPointer(event);
+        raycaster.setFromCamera(pointer, camera);
+        if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
+          const current = propsRef.current;
+          const item = current.room.items.find((entry) => entry.id === draggingId);
+          if (!item) return;
+          const rotated = Math.abs(item.rotation % 180) === 90;
+          const width = rotated ? item.size.depth : item.size.width;
+          const depth = rotated ? item.size.width : item.size.depth;
+          const x = Math.max(width / 2, Math.min(current.room.dimensions.width - width / 2, Math.round(hitPoint.x / current.snap) * current.snap));
+          const z = Math.max(depth / 2, Math.min(current.room.dimensions.depth - depth / 2, Math.round(hitPoint.z / current.snap) * current.snap));
+          current.onChangeItem(draggingId, { position: { x, z } });
+        }
+      } else if (orbiting) {
+        azimuth -= (event.clientX - lastX) * 0.008;
+        elevation = Math.max(0.28, Math.min(1.35, elevation + (event.clientY - lastY) * 0.006));
+        lastX = event.clientX;
+        lastY = event.clientY;
+        updateCamera();
+      } else {
+        renderer.domElement.style.cursor = pick(event) ? "grab" : propsRef.current.viewMode === "perspective" ? "move" : "default";
+      }
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      draggingId = null;
+      orbiting = false;
+      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+      renderer.domElement.style.cursor = "default";
+    };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (propsRef.current.viewMode === "perspective") {
+        distance = Math.max(3800, Math.min(12000, distance + event.deltaY * 4));
+      } else {
+        orthographic.zoom = Math.max(0.55, Math.min(2.4, orthographic.zoom * (event.deltaY > 0 ? 0.92 : 1.08)));
+        orthographic.updateProjectionMatrix();
+      }
+      updateCamera();
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(host);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerUp);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+    let frame = 0;
+    const animate = () => { frame = requestAnimationFrame(animate); renderer.render(scene, camera); };
+    rebuild();
+    resize();
+    animate();
+    (host as HTMLDivElement & { __bedroomState?: ViewportState }).__bedroomState = { rebuild };
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+      clearWorld();
+      renderer.dispose();
+      renderer.domElement.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const host = hostRef.current as (HTMLDivElement & { __bedroomState?: ViewportState }) | null;
+    host?.__bedroomState?.rebuild();
+  }, [props.room, props.selectedId, props.collisionIds, props.viewMode, props.showGrid, props.showWalls]);
+
+  if (webglUnavailable) {
+    return <BedroomFallback2D {...props} />;
+  }
+  return <div ref={hostRef} className="three-viewport" aria-label={`${props.room.name}三维布局编辑画布`} />;
+}
+
+function BedroomFallback2D({ room, selectedId, collisionIds, onSelect }: Props) {
+  const pad = 280;
+  const outline = room.outline.map((point) => `${point.x},${point.z}`).join(" ");
+  const bay = room.bayWindow;
+  return (
+    <div className="three-viewport fallback-viewport" aria-label={`${room.name}平面兼容布局画布`}>
+      <div className="fallback-notice">
+        <strong>平面兼容模式</strong>
+        <span>当前浏览器禁用了 WebGL；可继续选择家具和编辑参数。</span>
+      </div>
+      <svg
+        className="fallback-plan"
+        viewBox={`${-pad} ${-pad} ${room.dimensions.width + pad * 2} ${room.dimensions.depth + pad * 2}`}
+        role="img"
+        aria-label={`${room.name}平面布局`}
+      >
+        <defs>
+          <pattern id="fallback-grid" width="200" height="200" patternUnits="userSpaceOnUse">
+            <path d="M 200 0 L 0 0 0 200" fill="none" stroke="#d2cec4" strokeWidth="8" />
+          </pattern>
+        </defs>
+        <polygon points={outline} fill="#faf7ef" stroke="#aaa399" strokeWidth="32" />
+        <polygon points={outline} fill="url(#fallback-grid)" />
+        <rect
+          x={bay.side === "bottom" ? bay.start : room.dimensions.width}
+          y={bay.side === "bottom" ? room.dimensions.depth : bay.start}
+          width={bay.side === "bottom" ? bay.length : bay.depth}
+          height={bay.side === "bottom" ? bay.depth : bay.length}
+          fill="#d5dde3" stroke="#7c8992" strokeWidth="18"
+        />
+        {room.keepOutZones.map((zone) => <g key={zone.id}>
+          <rect x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#df8d55" fillOpacity=".18" stroke="#cf7846" strokeWidth="14" strokeDasharray="46 30" />
+          <text x={zone.x + zone.width / 2} y={zone.z + zone.depth / 2} textAnchor="middle" className="fallback-zone-label">{zone.label}</text>
+        </g>)}
+        {room.items.map((item) => {
+          const zone = clearanceRect(item);
+          return zone ? <rect key={`${item.id}-clearance`} x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#d8a24d" fillOpacity=".2" stroke="#c58a2d" strokeWidth="12" strokeDasharray="36 24" /> : null;
+        })}
+        {room.items.map((item) => {
+          const rotated = Math.abs(item.rotation % 180) === 90;
+          const width = rotated ? item.size.depth : item.size.width;
+          const depth = rotated ? item.size.width : item.size.depth;
+          const warning = collisionIds.has(item.id);
+          return (
+            <g key={item.id} onClick={() => onSelect(item.id)} className="fallback-item" role="button">
+              <rect
+                x={item.position.x - width / 2}
+                y={item.position.z - depth / 2}
+                width={width}
+                height={depth}
+                rx="40"
+                fill={item.color}
+                stroke={warning ? "#c95845" : selectedId === item.id ? "#d78b31" : "#8d857b"}
+                strokeWidth={selectedId === item.id || warning ? 32 : 14}
+              />
+              <text x={item.position.x} y={item.position.z} textAnchor="middle" dominantBaseline="middle">{item.name}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
