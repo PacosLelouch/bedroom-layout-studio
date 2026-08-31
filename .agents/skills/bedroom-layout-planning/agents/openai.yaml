@@ -1,0 +1,4 @@
+interface:
+  display_name: "卧室布局规划"
+  short_description: "按房间输入、家具状态和功能优先级生成并评估卧室布局"
+  default_prompt: "使用 $bedroom-layout-planning 根据我的房间尺寸和需求生成可实施的卧室布局。"
