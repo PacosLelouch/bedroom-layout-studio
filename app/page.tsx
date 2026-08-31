@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Armchair, BedDouble, Box, ChevronDown, Copy, FileImage, Grid3X3, Layers3,
-  Maximize2, MousePointer2, Move, Redo2, RotateCcw, RotateCw, Ruler, Sparkles,
-  Trash2, Undo2, Upload, X,
+  Armchair, BedDouble, Box, CheckCircle2, ChevronDown, Copy, Download, FileImage, FileUp, FolderOpen, Grid3X3, Layers3,
+  Maximize2, MousePointer2, Move, Plus, Redo2, RotateCcw, RotateCw, Ruler, Sparkles,
+  Save, Trash2, Undo2, Upload, X,
 } from "lucide-react";
 import { BedroomViewport } from "@/components/bedroom-viewport";
 import { ASSET_CATALOG, catalogItemToFurniture } from "@/lib/bedroom/asset-registry";
 import { PENDING_GENERATED_ASSET_COUNT } from "@/lib/bedroom/generated/registry";
 import { collides } from "@/lib/bedroom/geometry";
+import { loadLayoutFromBrowser, loadLayoutFromFile, saveLayoutCopy, saveLayoutToBrowser } from "@/lib/bedroom/layout-storage";
 import { INITIAL_ROOMS } from "@/lib/bedroom/room-layouts";
 import type { FurnitureItem, InteractionMode, RoomLayout, ViewMode } from "@/lib/bedroom/types";
 
@@ -32,10 +33,15 @@ export default function Home() {
   const [showGrid, setShowGrid] = useState(true);
   const [showWalls, setShowWalls] = useState(true);
   const [showReference, setShowReference] = useState(false);
+  const [layoutNotice, setLayoutNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<"load" | "save" | null>(null);
+  const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [newRoom, setNewRoom] = useState({ name: "新房间", width: 3000, depth: 3600, height: 2800 });
+  const layoutFileRef = useRef<HTMLInputElement>(null);
   const room = rooms.find((entry) => entry.id === roomId) ?? rooms[0];
   const selected = room.items.find((item) => item.id === selectedId) ?? null;
   const collisionIds = useMemo(() => new Set(room.items.filter((item) => collides(item, room)).map((item) => item.id)), [room]);
-  const occupiedArea = useMemo(() => room.items.filter((item) => !item.wallMounted).reduce((sum, item) => sum + item.size.width * item.size.depth, 0), [room.items]);
+  const occupiedArea = useMemo(() => room.items.filter((item) => !item.wallMounted && item.supportSurface !== "bay-window").reduce((sum, item) => sum + item.size.width * item.size.depth, 0), [room.items]);
   const occupancy = Math.min(100, Math.round(occupiedArea / (room.clearArea * 1_000_000) * 100));
 
   const applyRooms = useCallback((updater: (current: RoomLayout[]) => RoomLayout[], recordHistory = true) => {
@@ -100,8 +106,15 @@ export default function Home() {
         return {
           ...item,
           interactionState: opening ? "open" : "closed",
-          position: { ...item.position, z: opening ? item.expandedPositionZ ?? item.position.z : item.collapsedPositionZ ?? item.position.z },
-          size: { ...item.size, depth: opening ? item.expandedDepth ?? 2000 : item.collapsedDepth ?? 850 },
+          position: {
+            x: opening ? item.expandedPositionX ?? item.position.x : item.collapsedPositionX ?? item.position.x,
+            z: opening ? item.expandedPositionZ ?? item.position.z : item.collapsedPositionZ ?? item.position.z,
+          },
+          size: {
+            ...item.size,
+            width: opening ? item.expandedWidth ?? item.size.width : item.collapsedWidth ?? item.size.width,
+            depth: opening ? item.expandedDepth ?? item.size.depth : item.collapsedDepth ?? item.size.depth,
+          },
         };
       }),
     }));
@@ -123,6 +136,95 @@ export default function Home() {
     setSelectedId(copy.id);
   };
 
+  const showLayoutNotice = (kind: "success" | "error", message: string) => {
+    setLayoutNotice({ kind, message });
+    window.setTimeout(() => setLayoutNotice(null), 3200);
+  };
+
+  const saveLayout = () => {
+    try {
+      saveLayoutToBrowser(rooms);
+      showLayoutNotice("success", "方案已保存到此浏览器");
+    } catch {
+      showLayoutNotice("error", "保存失败，请检查浏览器存储权限");
+    }
+  };
+
+  const saveCopy = async () => {
+    setOpenActionMenu(null);
+    try {
+      const method = await saveLayoutCopy(rooms);
+      showLayoutNotice("success", method === "picker" ? "JSON 副本已保存" : "JSON 副本已下载");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      showLayoutNotice("error", "无法保存 JSON 副本");
+    }
+  };
+
+  const restoreLayout = (nextRooms: RoomLayout[], message: string) => {
+    const nextRoom = nextRooms.find((entry) => entry.id === roomId) ?? nextRooms[0];
+    setLayoutHistory((current) => ({
+      past: [...current.past, current.present].slice(-60),
+      present: nextRooms,
+      future: [],
+    }));
+    setRoomId(nextRoom.id);
+    setSelectedId(nextRoom.items[0]?.id ?? null);
+    setShowReference(false);
+    showLayoutNotice("success", message);
+  };
+
+  const loadLayout = () => {
+    setOpenActionMenu(null);
+    try {
+      const snapshot = loadLayoutFromBrowser();
+      if (!snapshot) {
+        showLayoutNotice("error", "此浏览器中还没有已保存方案");
+        return;
+      }
+      restoreLayout(snapshot.rooms, "已读取浏览器方案");
+    } catch {
+      showLayoutNotice("error", "已保存方案格式无效，无法读取");
+    }
+  };
+
+  const loadLayoutFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const snapshot = await loadLayoutFromFile(file);
+      restoreLayout(snapshot.rooms, `已读取 ${file.name}`);
+    } catch {
+      showLayoutNotice("error", "所选文件不是有效的布局 JSON");
+    }
+  };
+
+  const addRoom = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const width = Math.max(1000, Math.round(newRoom.width));
+    const depth = Math.max(1000, Math.round(newRoom.depth));
+    const height = Math.max(2000, Math.round(newRoom.height));
+    const id = `room-${Date.now()}`;
+    const created: RoomLayout = {
+      id,
+      name: newRoom.name.trim() || "新房间",
+      dimensions: { width, depth, height },
+      clearArea: Number((width * depth / 1_000_000).toFixed(2)),
+      outline: [{ x: 0, z: 0 }, { x: width, z: 0 }, { x: width, z: depth }, { x: 0, z: depth }],
+      keepOutZones: [],
+      doors: [],
+      items: [],
+    };
+    applyRooms((current) => [...current, created]);
+    setRoomId(id);
+    setSelectedId(null);
+    setShowReference(false);
+    setAddRoomOpen(false);
+    setNewRoom({ name: "新房间", width: 3000, depth: 3600, height: 2800 });
+    showLayoutNotice("success", `${created.name}已创建`);
+  };
+
   return (
     <main className="studio-shell">
       <header className="topbar">
@@ -133,14 +235,46 @@ export default function Home() {
             <button key={entry.id} className={entry.id === roomId ? "room-tab active" : "room-tab"}
               onClick={() => { setRoomId(entry.id); setSelectedId(entry.items[0]?.id ?? null); }}>{entry.name}</button>
           ))}
-          <button className="room-tab add-room" title="添加房间">＋</button>
+          <button className="room-tab add-room" title="添加房间" aria-label="添加房间" onClick={() => setAddRoomOpen(true)}>＋</button>
         </nav>
         <div className="top-actions">
           <button className={layoutHistory.past.length ? "icon-button" : "icon-button muted"} aria-label="撤销" title="撤销 Ctrl+Z" onClick={undo} disabled={!layoutHistory.past.length}><Undo2 size={17} /></button>
           <button className={layoutHistory.future.length ? "icon-button" : "icon-button muted"} aria-label="重做" title="重做 Ctrl+Y" onClick={redo} disabled={!layoutHistory.future.length}><Redo2 size={17} /></button>
-          <button className="primary-button"><Sparkles size={15} /> 保存方案</button>
+          <div className="action-menu-wrap">
+            <button className="load-button" onClick={() => setOpenActionMenu((value) => value === "load" ? null : "load")} aria-haspopup="menu" aria-expanded={openActionMenu === "load"}><FolderOpen size={15} /> 读取方案 <ChevronDown size={13} /></button>
+            {openActionMenu === "load" && <div className="action-menu" role="menu">
+              <button role="menuitem" onClick={loadLayout}><FolderOpen size={15} /><span><strong>读取浏览器方案</strong><small>恢复上次保存的版本</small></span></button>
+              <button role="menuitem" onClick={() => { setOpenActionMenu(null); layoutFileRef.current?.click(); }}><FileUp size={15} /><span><strong>从 JSON 文件读取</strong><small>导入之前保存的副本</small></span></button>
+            </div>}
+          </div>
+          <div className="action-menu-wrap">
+            <button className="primary-button" onClick={() => setOpenActionMenu((value) => value === "save" ? null : "save")} aria-haspopup="menu" aria-expanded={openActionMenu === "save"}><Save size={15} /> 保存方案 <ChevronDown size={13} /></button>
+            {openActionMenu === "save" && <div className="action-menu save-menu" role="menu">
+              <button role="menuitem" onClick={() => { setOpenActionMenu(null); saveLayout(); }}><Save size={15} /><span><strong>保存到浏览器</strong><small>覆盖当前浏览器中的方案</small></span></button>
+              <button role="menuitem" onClick={saveCopy}><Download size={15} /><span><strong>另存为 JSON 副本</strong><small>选择目录和文件名</small></span></button>
+            </div>}
+          </div>
+          <input ref={layoutFileRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={loadLayoutFile} />
         </div>
       </header>
+
+      {layoutNotice && <div className={`layout-notice ${layoutNotice.kind}`} role="status">
+        {layoutNotice.kind === "success" ? <CheckCircle2 size={15} /> : <Sparkles size={15} />}
+        {layoutNotice.message}
+      </div>}
+
+      {addRoomOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddRoomOpen(false); }}>
+        <form className="room-dialog" onSubmit={addRoom} role="dialog" aria-modal="true" aria-labelledby="add-room-title">
+          <div className="room-dialog-heading"><span><Plus size={17} /></span><div><h2 id="add-room-title">添加空房间</h2><p>创建后可从左侧加入家具，并随方案一起保存。</p></div><button type="button" onClick={() => setAddRoomOpen(false)} aria-label="关闭"><X size={16} /></button></div>
+          <label className="dialog-field"><span>房间名称</span><input autoFocus value={newRoom.name} onChange={(event) => setNewRoom((current) => ({ ...current, name: event.target.value }))} /></label>
+          <div className="dialog-dimensions">
+            <label className="dialog-field"><span>宽度（mm）</span><input type="number" min="1000" max="20000" value={newRoom.width} onChange={(event) => setNewRoom((current) => ({ ...current, width: Number(event.target.value) }))} /></label>
+            <label className="dialog-field"><span>深度（mm）</span><input type="number" min="1000" max="20000" value={newRoom.depth} onChange={(event) => setNewRoom((current) => ({ ...current, depth: Number(event.target.value) }))} /></label>
+            <label className="dialog-field"><span>层高（mm）</span><input type="number" min="2000" max="10000" value={newRoom.height} onChange={(event) => setNewRoom((current) => ({ ...current, height: Number(event.target.value) }))} /></label>
+          </div>
+          <div className="dialog-actions"><button type="button" onClick={() => setAddRoomOpen(false)}>取消</button><button type="submit" className="dialog-primary"><Plus size={14} /> 创建房间</button></div>
+        </form>
+      </div>}
 
       <section className="workspace">
         <aside className="asset-panel">
@@ -180,14 +314,16 @@ export default function Home() {
               <button className={interactionMode === "rotate" ? "active" : ""} onClick={() => setInteractionMode("rotate")} title="左右拖拽家具旋转"><RotateCw size={15} /> 旋转</button>
             </div>
             <span className="room-dimension"><Ruler size={14} /> 净尺寸 {room.dimensions.width} × {room.dimensions.depth} mm</span>
-            <button className={showReference ? "tool-button reference active" : "tool-button reference"} onClick={() => setShowReference((value) => !value)}><FileImage size={14} /> 标尺原图</button>
+            {room.planSrc
+              ? <button className={showReference ? "tool-button reference active" : "tool-button reference"} onClick={() => setShowReference((value) => !value)}><FileImage size={14} /> 标尺原图</button>
+              : <span className="toolbar-spacer" />}
             <button className="tool-button" onClick={() => setShowWalls((value) => !value)}>{showWalls ? "隐藏墙体" : "显示墙体"}</button>
             <button className="icon-button" title="适应窗口"><Maximize2 size={16} /></button>
           </div>
           <BedroomViewport room={room} selectedId={selectedId} collisionIds={collisionIds}
             viewMode={viewMode} interactionMode={interactionMode} snap={snap} showGrid={showGrid} showWalls={showWalls}
             onSelect={setSelectedId} onChangeItem={updateItem} onToggleDoor={toggleDoor} onInteractItem={interactItem} />
-          {showReference && <aside className="plan-reference no-scrollbar" aria-label={`${room.name}标尺原图`}>
+          {showReference && room.planSrc && <aside className="plan-reference no-scrollbar" aria-label={`${room.name}标尺原图`}>
             <div className="plan-reference-heading"><span><strong>{room.name}标尺原图</strong><small>SVG · 尺寸权威来源</small></span><button onClick={() => setShowReference(false)} aria-label="关闭标尺原图"><X size={15} /></button></div>
             <Image src={room.planSrc} alt={`${room.name}建筑标尺图`} width={1200} height={1300} unoptimized />
           </aside>}
@@ -232,6 +368,7 @@ export default function Home() {
               <span>{selected.assetId === "sofa-bed" ? "切换沙发 / 床形态" : "点击切换柜门并查看柜内空间"}</span>
             </button>}
             {selected.wallMounted && <div className="clearance-card neutral"><strong>墙面安装</strong><span>吊柜不占用地面通行空间，建议底沿离地 1450–1550 mm。</span></div>}
+            {selected.supportSurface === "bay-window" && <div className="clearance-card neutral"><strong>飘窗台承托</strong><span>柜体落在飘窗台上，不悬挂在窗前；柜底标高 {selected.baseHeight ?? room.bayWindow?.sillHeight ?? 0} mm。</span></div>}
             {collisionIds.has(selected.id) && <div className="warning-card"><strong>检测到空间冲突</strong><span>家具重叠或超出房间边界，请调整后再保存。</span></div>}
           </> : <div className="empty-inspector"><MousePointer2 size={28} /><strong>选择一件家具</strong><span>点击场景内的对象查看并编辑尺寸。</span></div>}
 

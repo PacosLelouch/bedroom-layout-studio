@@ -1,0 +1,25 @@
+{
+  "id": "small-secondary",
+  "name": "小次卧",
+  "dimensions": { "width": 2716, "depth": 2513, "height": 2800 },
+  "clearArea": 6.82,
+  "planSrc": "/floorplans/small-secondary-bedroom.svg",
+  "outline": [
+    { "x": 0, "z": 0 }, { "x": 2716, "z": 0 },
+    { "x": 2716, "z": 2513 }, { "x": 0, "z": 2513 }
+  ],
+  "keepOutZones": [
+    { "id": "small-entry-door", "label": "房门开启区 R900", "x": 1816, "z": 1613, "width": 900, "depth": 900, "kind": "door" }
+  ],
+  "doors": [
+    { "id": "small-entry", "label": "房门 W900", "hinge": { "x": 2716, "z": 2513 }, "width": 900, "wallAxis": "z", "wallCoordinate": 2513, "openingStart": 1816, "closedAngle": 180, "openAngle": 270, "isOpen": true }
+  ],
+  "bayWindow": { "side": "right", "start": 0, "length": 1500, "depth": 650, "sillHeight": 600 },
+  "items": [
+    { "id": "small-sofa-bed", "assetId": "sofa-bed", "name": "1200 折叠沙发床", "position": { "x": 300, "z": 1000 }, "rotation": 0, "size": { "width": 600, "depth": 2000, "height": 720 }, "color": "#c9c2d5", "interactionState": "closed", "collapsedWidth": 600, "expandedWidth": 1200, "collapsedDepth": 2000, "expandedDepth": 2000, "collapsedPositionX": 300, "expandedPositionX": 600, "collapsedPositionZ": 1000, "expandedPositionZ": 1000 },
+    { "id": "small-wardrobe", "assetId": "sliding-wardrobe", "name": "推拉门衣柜", "position": { "x": 1700, "z": 325 }, "rotation": 0, "size": { "width": 1000, "depth": 650, "height": 2400 }, "color": "#c8b696", "interactionState": "closed" },
+    { "id": "small-desk", "assetId": "desk", "name": "飘窗书桌", "position": { "x": 2466, "z": 700 }, "rotation": 90, "size": { "width": 1000, "depth": 500, "height": 750 }, "color": "#a98d69" },
+    { "id": "small-cabinet", "assetId": "bay-cabinet", "name": "飘窗摆柜", "position": { "x": 2866, "z": 700 }, "rotation": 90, "size": { "width": 1000, "depth": 300, "height": 700 }, "color": "#cab698", "supportSurface": "bay-window", "baseHeight": 600 },
+    { "id": "small-chair", "assetId": "desk-chair", "name": "书桌椅", "position": { "x": 1800, "z": 1350 }, "rotation": 90, "size": { "width": 420, "depth": 420, "height": 800 }, "color": "#826f8f" }
+  ]
+}

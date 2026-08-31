@@ -16,11 +16,17 @@ export interface FurnitureItem {
   size: Dimensions3D;
   color: string;
   wallMounted?: boolean;
+  supportSurface?: "floor" | "bay-window" | "wall";
+  baseHeight?: number;
   clearanceDepth?: number;
   clearanceLabel?: string;
   interactionState?: "open" | "closed";
   collapsedDepth?: number;
   expandedDepth?: number;
+  collapsedWidth?: number;
+  expandedWidth?: number;
+  collapsedPositionX?: number;
+  expandedPositionX?: number;
   collapsedPositionZ?: number;
   expandedPositionZ?: number;
 }
@@ -66,12 +72,20 @@ export interface RoomLayout {
   name: string;
   dimensions: Dimensions3D;
   clearArea: number;
-  planSrc: string;
+  planSrc?: string;
   outline: PlanPoint[];
   keepOutZones: KeepOutZone[];
   doors: DoorOpening[];
-  bayWindow: BayWindow;
+  bayWindow?: BayWindow;
   items: FurnitureItem[];
+}
+
+export interface LayoutSnapshot {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  savedAt: string;
+  rooms: RoomLayout[];
 }
 
 export interface ProceduralAssetOptions {

@@ -1,0 +1,25 @@
+{
+  "id": "large-secondary",
+  "name": "大次卧",
+  "dimensions": { "width": 2716, "depth": 3108, "height": 2800 },
+  "clearArea": 8.44,
+  "planSrc": "/floorplans/large-secondary-bedroom.svg",
+  "outline": [
+    { "x": 0, "z": 0 }, { "x": 2716, "z": 0 },
+    { "x": 2716, "z": 3108 }, { "x": 0, "z": 3108 }
+  ],
+  "keepOutZones": [
+    { "id": "large-entry-door", "label": "房门开启区 R900", "x": 0, "z": 0, "width": 900, "depth": 900, "kind": "door" }
+  ],
+  "doors": [
+    { "id": "large-entry", "label": "房门 W900", "hinge": { "x": 900, "z": 0 }, "width": 900, "wallAxis": "z", "wallCoordinate": 0, "openingStart": 0, "closedAngle": 180, "openAngle": 90, "isOpen": true }
+  ],
+  "bayWindow": { "side": "bottom", "start": 0, "length": 2716, "depth": 650, "sillHeight": 600 },
+  "items": [
+    { "id": "large-wardrobe", "assetId": "sliding-wardrobe", "name": "推拉门衣柜", "position": { "x": 1816, "z": 325 }, "rotation": 0, "size": { "width": 1800, "depth": 650, "height": 2400 }, "color": "#c8b696", "interactionState": "closed" },
+    { "id": "large-bed", "assetId": "queen-bed", "name": "1500 双人床", "position": { "x": 750, "z": 2054 }, "rotation": 0, "size": { "width": 1500, "depth": 2000, "height": 520 }, "color": "#b8c8bf" },
+    { "id": "large-desk", "assetId": "desk", "name": "飘窗侧书桌", "position": { "x": 2466, "z": 1800 }, "rotation": 90, "size": { "width": 1000, "depth": 500, "height": 750 }, "color": "#a98d69" },
+    { "id": "large-cabinet", "assetId": "bay-cabinet", "name": "飘窗摆柜", "position": { "x": 2216, "z": 3258 }, "rotation": 0, "size": { "width": 1000, "depth": 300, "height": 700 }, "color": "#c5ad8c", "supportSurface": "bay-window", "baseHeight": 600 },
+    { "id": "large-chair", "assetId": "desk-chair", "name": "书桌椅", "position": { "x": 1850, "z": 1800 }, "rotation": 90, "size": { "width": 460, "depth": 460, "height": 820 }, "color": "#6f877d" }
+  ]
+}

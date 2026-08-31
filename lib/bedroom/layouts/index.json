@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "layouts": [
+    { "id": "master", "name": "主卧现有布局", "file": "master.json" },
+    { "id": "large-secondary", "name": "大次卧现有布局", "file": "large-secondary.json" },
+    { "id": "small-secondary", "name": "小次卧现有布局", "file": "small-secondary.json" }
+  ]
+}
