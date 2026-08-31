@@ -52,12 +52,22 @@ const sofaBedFactory: ProceduralAssetFactory = (spec, options) => {
   const { width, depth } = options.dimensions;
   const group = new THREE.Group();
   const upholstery = options.color ?? "#c9c2d5";
-  group.add(box([width - 130, 180, depth - 170], upholstery, [0, 390, 35]));
-  group.add(box([width - 150, 430, 125], upholstery, [0, 565, -depth / 2 + 70]));
-  group.add(box([105, 430, depth - 90], "#9f97ad", [-width / 2 + 55, 365, 25]));
-  group.add(box([105, 430, depth - 90], "#9f97ad", [width / 2 - 55, 365, 25]));
-  group.add(box([width - 230, 95, depth - 260], "#e7e0ed", [0, 515, 55]));
-  for (const x of [-width * 0.38, width * 0.38]) group.add(box([70, 150, 70], "#675f70", [x, 75, depth * 0.27]));
+  const longitudinal = depth > width;
+  if (longitudinal) {
+    group.add(box([width - 170, 180, depth - 130], upholstery, [35, 390, 0]));
+    group.add(box([125, 430, depth - 150], upholstery, [-width / 2 + 70, 565, 0]));
+    group.add(box([width - 90, 430, 105], "#9f97ad", [25, 365, -depth / 2 + 55]));
+    group.add(box([width - 90, 430, 105], "#9f97ad", [25, 365, depth / 2 - 55]));
+    group.add(box([width - 260, 95, depth - 230], "#e7e0ed", [55, 515, 0]));
+    for (const z of [-depth * 0.38, depth * 0.38]) group.add(box([70, 150, 70], "#675f70", [width * 0.27, 75, z]));
+  } else {
+    group.add(box([width - 130, 180, depth - 170], upholstery, [0, 390, 35]));
+    group.add(box([width - 150, 430, 125], upholstery, [0, 565, -depth / 2 + 70]));
+    group.add(box([105, 430, depth - 90], "#9f97ad", [-width / 2 + 55, 365, 25]));
+    group.add(box([105, 430, depth - 90], "#9f97ad", [width / 2 - 55, 365, 25]));
+    group.add(box([width - 230, 95, depth - 260], "#e7e0ed", [0, 515, 55]));
+    for (const x of [-width * 0.38, width * 0.38]) group.add(box([70, 150, 70], "#675f70", [x, 75, depth * 0.27]));
+  }
   return group;
 };
 
@@ -132,12 +142,13 @@ const BUILTIN_ASSET_CATALOG: CatalogAsset[] = [
   { id: "double-bed", name: "双人床", category: "bed", size: { width: 1800, depth: 2100, height: 520 }, color: "#d9cbb9", factory: bedFactory, source: "builtin" },
   { id: "queen-bed", name: "1500 双人床", category: "bed", size: { width: 1500, depth: 2000, height: 520 }, color: "#b8c8bf", factory: bedFactory, source: "builtin" },
   { id: "single-bed", name: "单人床", category: "bed", size: { width: 1200, depth: 2000, height: 500 }, color: "#b8c8bf", factory: bedFactory, source: "builtin" },
-  { id: "sofa-bed", name: "折叠沙发床", category: "bed", size: { width: 1200, depth: 850, height: 720 }, color: "#c9c2d5", factory: sofaBedFactory, source: "builtin" },
+  { id: "sofa-bed", name: "折叠沙发床", category: "bed", size: { width: 600, depth: 2000, height: 720 }, color: "#c9c2d5", factory: sofaBedFactory, source: "builtin" },
   { id: "wardrobe", name: "平开门衣柜", category: "storage", size: { width: 1800, depth: 600, height: 2400 }, color: "#c8b696", factory: hingedWardrobeFactory, source: "builtin" },
   { id: "sliding-wardrobe", name: "推拉门衣柜", category: "storage", size: { width: 1800, depth: 650, height: 2400 }, color: "#c8b696", factory: slidingWardrobeFactory, source: "builtin" },
   { id: "desk", name: "书桌", category: "desk", size: { width: 1200, depth: 600, height: 750 }, color: "#a98d69", factory: deskFactory, source: "builtin" },
   { id: "vanity", name: "梳妆台", category: "desk", size: { width: 1050, depth: 450, height: 750 }, color: "#aa8b69", factory: deskFactory, source: "builtin" },
   { id: "wall-cabinet", name: "吊书柜", category: "storage", size: { width: 1000, depth: 300, height: 700 }, color: "#c5ad8c", factory: simpleFactory, source: "builtin" },
+  { id: "bay-cabinet", name: "飘窗摆柜", category: "storage", size: { width: 1000, depth: 300, height: 700 }, color: "#c5ad8c", factory: simpleFactory, source: "builtin" },
   { id: "entry-cabinet", name: "收纳薄柜", category: "storage", size: { width: 800, depth: 350, height: 2200 }, color: "#bda989", factory: simpleFactory, source: "builtin" },
   { id: "nightstand", name: "床头柜", category: "storage", size: { width: 480, depth: 420, height: 520 }, color: "#b99f7c", factory: simpleFactory, source: "builtin" },
   { id: "desk-chair", name: "书桌椅", category: "seat", size: { width: 460, depth: 460, height: 820 }, color: "#6f877d", factory: simpleFactory, source: "builtin" },
@@ -184,10 +195,12 @@ export function catalogItemToFurniture(assetId: string, room: RoomLayout): Furni
     size: { ...asset.size },
     color: asset.color,
     wallMounted: asset.id === "wall-cabinet",
-    clearanceDepth: asset.id === "wardrobe" ? 900 : asset.id === "sliding-wardrobe" ? 200 : undefined,
-    clearanceLabel: asset.id === "wardrobe" ? "平开门开启区 900" : asset.id === "sliding-wardrobe" ? "推拉门操作区 200" : undefined,
+    clearanceDepth: asset.id === "wardrobe" ? asset.size.width / 2 : undefined,
+    clearanceLabel: asset.id === "wardrobe" ? `双开门开启区 ${asset.size.width / 2}` : undefined,
     interactionState: ["wardrobe", "sliding-wardrobe", "sofa-bed"].includes(asset.id) ? "closed" : undefined,
-    collapsedDepth: asset.id === "sofa-bed" ? 850 : undefined,
+    collapsedWidth: asset.id === "sofa-bed" ? 600 : undefined,
+    expandedWidth: asset.id === "sofa-bed" ? 1200 : undefined,
+    collapsedDepth: asset.id === "sofa-bed" ? 2000 : undefined,
     expandedDepth: asset.id === "sofa-bed" ? 2000 : undefined,
   };
 }

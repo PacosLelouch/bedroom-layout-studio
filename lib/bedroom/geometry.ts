@@ -54,10 +54,25 @@ function rectInsideOutline(rect: PlanRect, outline: PlanPoint[]) {
   ].every((point) => pointInPolygon(point, outline));
 }
 
+export function bayWindowRect(room: RoomLayout): PlanRect | null {
+  const bay = room.bayWindow;
+  if (!bay) return null;
+  return bay.side === "bottom"
+    ? { x: bay.start, z: room.dimensions.depth, width: bay.length, depth: bay.depth }
+    : { x: room.dimensions.width, z: bay.start, width: bay.depth, depth: bay.length };
+}
+
 export function collides(item: FurnitureItem, room: RoomLayout) {
   if (item.wallMounted) return false;
   const rect = itemRect(item);
-  if (!rectInsideOutline(rect, room.outline)) return true;
+  const supportedByBay = item.supportSurface === "bay-window";
+  const bayRect = bayWindowRect(room);
+  if (supportedByBay ? !bayRect || !rectInsideOutline(rect, [
+    { x: bayRect.x, z: bayRect.z },
+    { x: bayRect.x + bayRect.width, z: bayRect.z },
+    { x: bayRect.x + bayRect.width, z: bayRect.z + bayRect.depth },
+    { x: bayRect.x, z: bayRect.z + bayRect.depth },
+  ]) : !rectInsideOutline(rect, room.outline)) return true;
   if (room.keepOutZones.some((zone) => rectsOverlap(rect, zone))) return true;
   return room.items.some((other) => {
     if (other.id === item.id || other.wallMounted) return false;

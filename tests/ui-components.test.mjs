@@ -124,3 +124,46 @@ test("rejects dimensions whose proportions differ by more than five percent", as
     /超过 5%/,
   );
 });
+
+test("keeps all default bedroom layouts free of hard collisions", async () => {
+  const { INITIAL_ROOMS } = await vite.ssrLoadModule("/lib/bedroom/room-layouts.ts");
+  const { collides } = await vite.ssrLoadModule("/lib/bedroom/geometry.ts");
+
+  for (const room of INITIAL_ROOMS) {
+    assert.deepEqual(
+      room.items.filter((item) => collides(item, room)).map((item) => item.id),
+      [],
+      `${room.name} contains a hard collision`,
+    );
+  }
+});
+
+test("keeps the small bedroom valid when the folding sofa bed is opened", async () => {
+  const { INITIAL_ROOMS } = await vite.ssrLoadModule("/lib/bedroom/room-layouts.ts");
+  const { collides } = await vite.ssrLoadModule("/lib/bedroom/geometry.ts");
+  const source = INITIAL_ROOMS.find((room) => room.id === "small-secondary");
+  const room = structuredClone(source);
+  const bed = room.items.find((item) => item.id === "small-sofa-bed");
+
+  bed.interactionState = "open";
+  bed.position.x = bed.expandedPositionX;
+  bed.position.z = bed.expandedPositionZ;
+  bed.size.width = bed.expandedWidth;
+  bed.size.depth = bed.expandedDepth;
+
+  assert.equal(bed.size.width, 1200);
+  assert.equal(bed.size.depth, 2000);
+  assert.deepEqual(room.items.filter((item) => collides(item, room)).map((item) => item.id), []);
+});
+
+test("uses the bay sill as support instead of floating cabinets", async () => {
+  const { INITIAL_ROOMS } = await vite.ssrLoadModule("/lib/bedroom/room-layouts.ts");
+
+  for (const roomId of ["small-secondary", "large-secondary"]) {
+    const room = INITIAL_ROOMS.find((entry) => entry.id === roomId);
+    const cabinet = room.items.find((item) => item.assetId === "bay-cabinet");
+    assert.equal(cabinet.supportSurface, "bay-window");
+    assert.equal(cabinet.baseHeight, room.bayWindow.sillHeight);
+    assert.equal(cabinet.wallMounted, undefined);
+  }
+});

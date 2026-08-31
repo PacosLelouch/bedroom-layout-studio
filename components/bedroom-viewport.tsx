@@ -133,19 +133,18 @@ export function BedroomViewport(props: Props) {
         world.add(grid);
       }
       if (current.showWalls) {
-        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide });
-        const addWall = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+        const addWall = (a: { x: number; z: number }, b: { x: number; z: number }, wallHeight = height, centerY = wallHeight / 2) => {
           const length = Math.hypot(b.x - a.x, b.z - a.z);
-          if (length < 1) return;
-          const wall = new THREE.Mesh(new THREE.BoxGeometry(length, height, 80), wallMaterial.clone());
-          wall.position.set((a.x + b.x) / 2, height / 2, (a.z + b.z) / 2);
+          if (length < 1 || wallHeight < 1) return;
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, 80), wallMaterial.clone());
+          wall.position.set((a.x + b.x) / 2, centerY, (a.z + b.z) / 2);
           wall.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
           wall.receiveShadow = true;
           world.add(wall);
         };
         current.room.outline.forEach((point, index) => {
           const next = current.room.outline[(index + 1) % current.room.outline.length];
-          if ((point.x === width && next.x === width) || (point.z === depth && next.z === depth)) return;
           const horizontal = point.z === next.z;
           const axis = horizontal ? "z" : "x";
           const coordinate = horizontal ? point.z : point.x;
@@ -162,6 +161,27 @@ export function BedroomViewport(props: Props) {
               return pieces;
             });
           });
+          const bay = current.room.bayWindow;
+          const isBayOpening = bay && (
+            (bay.side === "bottom" && axis === "z" && coordinate === depth) ||
+            (bay.side === "right" && axis === "x" && coordinate === width)
+          );
+          if (isBayOpening) {
+            const openingEnd = bay.start + bay.length;
+            spans = spans.flatMap(([from, to]) => {
+              if (openingEnd <= from || bay.start >= to) return [[from, to]];
+              const pieces: Array<[number, number]> = [];
+              if (bay.start > from) pieces.push([from, bay.start]);
+              if (openingEnd < to) pieces.push([openingEnd, to]);
+              return pieces;
+            });
+            const windowHeight = Math.min(1500, Math.max(600, height - bay.sillHeight - 300));
+            const windowTop = bay.sillHeight + windowHeight;
+            const openingStartPoint = horizontal ? { x: bay.start, z: coordinate } : { x: coordinate, z: bay.start };
+            const openingEndPoint = horizontal ? { x: openingEnd, z: coordinate } : { x: coordinate, z: openingEnd };
+            addWall(openingStartPoint, openingEndPoint, bay.sillHeight, bay.sillHeight / 2);
+            addWall(openingStartPoint, openingEndPoint, height - windowTop, windowTop + (height - windowTop) / 2);
+          }
           spans.forEach(([from, to]) => addWall(
             horizontal ? { x: from, z: coordinate } : { x: coordinate, z: from },
             horizontal ? { x: to, z: coordinate } : { x: coordinate, z: to },
@@ -169,16 +189,53 @@ export function BedroomViewport(props: Props) {
         });
       }
       const bay = current.room.bayWindow;
-      const bayGeometry = bay.side === "bottom"
-        ? new THREE.BoxGeometry(bay.length, bay.sillHeight, bay.depth)
-        : new THREE.BoxGeometry(bay.depth, bay.sillHeight, bay.length);
-      const bayMesh = new THREE.Mesh(bayGeometry, new THREE.MeshStandardMaterial({ color: "#cbd4dc", roughness: 0.76, transparent: true, opacity: 0.78 }));
-      bayMesh.position.set(
-        bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth / 2,
-        bay.sillHeight / 2,
-        bay.side === "bottom" ? depth + bay.depth / 2 : bay.start + bay.length / 2,
-      );
-      world.add(bayMesh);
+      if (bay) {
+        const bayGeometry = bay.side === "bottom"
+          ? new THREE.BoxGeometry(bay.length, bay.sillHeight, bay.depth)
+          : new THREE.BoxGeometry(bay.depth, bay.sillHeight, bay.length);
+        const bayMesh = new THREE.Mesh(bayGeometry, new THREE.MeshStandardMaterial({ color: "#cbd4dc", roughness: 0.76, transparent: true, opacity: 0.58, depthWrite: false }));
+        bayMesh.position.set(
+          bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth / 2,
+          bay.sillHeight / 2,
+          bay.side === "bottom" ? depth + bay.depth / 2 : bay.start + bay.length / 2,
+        );
+        world.add(bayMesh);
+
+        const glassHeight = Math.min(1500, Math.max(600, height - bay.sillHeight - 300));
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+          color: "#d9f1f5",
+          transparent: true,
+          opacity: 0.12,
+          transmission: 0.72,
+          roughness: 0.08,
+          metalness: 0,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        const frameMaterial = new THREE.MeshStandardMaterial({ color: "#8b989c", roughness: 0.42, transparent: true, opacity: 0.72 });
+        const glass = new THREE.Mesh(
+          bay.side === "bottom" ? new THREE.BoxGeometry(bay.length, glassHeight, 18) : new THREE.BoxGeometry(18, glassHeight, bay.length),
+          glassMaterial,
+        );
+        const glassX = bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth;
+        const glassZ = bay.side === "bottom" ? depth + bay.depth : bay.start + bay.length / 2;
+        glass.position.set(glassX, bay.sillHeight + glassHeight / 2, glassZ);
+        world.add(glass);
+
+        const addFrame = (frameWidth: number, frameHeight: number, x: number, y: number, z: number) => {
+          const frame = new THREE.Mesh(
+            bay.side === "bottom" ? new THREE.BoxGeometry(frameWidth, frameHeight, 34) : new THREE.BoxGeometry(34, frameHeight, frameWidth),
+            frameMaterial.clone(),
+          );
+          frame.position.set(x, y, z);
+          world.add(frame);
+        };
+        addFrame(bay.length + 55, 48, glassX, bay.sillHeight + 24, glassZ);
+        addFrame(bay.length + 55, 48, glassX, bay.sillHeight + glassHeight - 24, glassZ);
+        for (const offset of [-bay.length / 2, 0, bay.length / 2]) {
+          addFrame(48, glassHeight, bay.side === "bottom" ? glassX + offset : glassX, bay.sillHeight + glassHeight / 2, bay.side === "bottom" ? glassZ : glassZ + offset);
+        }
+      }
       const zoneMaterial = new THREE.MeshBasicMaterial({ color: "#df8d55", transparent: true, opacity: 0.18, depthWrite: false });
       current.room.keepOutZones.forEach((zone) => {
         const marker = new THREE.Mesh(new THREE.PlaneGeometry(zone.width, zone.depth), zoneMaterial.clone());
@@ -225,7 +282,7 @@ export function BedroomViewport(props: Props) {
       });
       for (const item of current.room.items) {
         const group = createAssetGroup(item);
-        group.position.set(item.position.x, item.wallMounted ? 1450 : 0, item.position.z);
+        group.position.set(item.position.x, item.baseHeight ?? (item.wallMounted ? 1450 : 0), item.position.z);
         group.rotation.y = THREE.MathUtils.degToRad(item.rotation);
         world.add(group);
         if (current.selectedId === item.id || current.collisionIds.has(item.id)) {
@@ -413,13 +470,13 @@ function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, on
         </defs>
         <polygon points={outline} fill="#faf7ef" stroke="#aaa399" strokeWidth="32" />
         <polygon points={outline} fill="url(#fallback-grid)" />
-        <rect
+        {bay && <rect
           x={bay.side === "bottom" ? bay.start : room.dimensions.width}
           y={bay.side === "bottom" ? room.dimensions.depth : bay.start}
           width={bay.side === "bottom" ? bay.length : bay.depth}
           height={bay.side === "bottom" ? bay.depth : bay.length}
-          fill="#d5dde3" stroke="#7c8992" strokeWidth="18"
-        />
+          fill="#d5eef2" fillOpacity=".24" stroke="#7c8992" strokeWidth="18"
+        />}
         {room.keepOutZones.map((zone) => <g key={zone.id}>
           <rect x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#df8d55" fillOpacity=".18" stroke="#cf7846" strokeWidth="14" strokeDasharray="46 30" />
           <text x={zone.x + zone.width / 2} y={zone.z + zone.depth / 2} textAnchor="middle" className="fallback-zone-label">{zone.label}</text>
