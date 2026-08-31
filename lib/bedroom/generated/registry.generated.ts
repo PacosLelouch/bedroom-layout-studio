@@ -7,6 +7,6 @@ export const GENERATED_ASSET_MODULES: GeneratedAssetModule[] = [
   {
     manifest: manifest0 as GeneratedAssetManifest,
     factory: factory0 as GeneratedModelFactory,
-    factoryHash: "8d8bb75013ccb425b15a739afe059e429c308c7c1b451e0a744f8947049412c8",
+    factoryHash: "15834d914c74c6dda4aad808ab79ff2793b7b5d879e1e8f2bf3b9496532657b5",
   },
 ];

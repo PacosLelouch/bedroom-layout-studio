@@ -31,10 +31,14 @@ async function loadAssets() {
     if (!exportPattern.test(manifest.factoryExport)) throw new Error(`Invalid factory export for ${manifest.id}`);
     const factoryPath = path.resolve(path.dirname(manifestPath), manifest.factoryFile);
     if (path.dirname(factoryPath) !== path.dirname(manifestPath) || !factoryPath.endsWith(".ts")) throw new Error(`Factory path must stay inside ${manifest.id}`);
-    const factorySource = await readFile(factoryPath);
+    const factorySource = await readFile(factoryPath, "utf8");
+    // Git normalizes text files to LF in GitHub Actions, while Windows
+    // checkouts may use CRLF. Hash normalized text so the generated registry
+    // remains stable across platforms.
+    const normalizedFactorySource = factorySource.replace(/\r\n/g, "\n");
     assets.push({
       manifest,
-      hash: createHash("sha256").update(factorySource).digest("hex"),
+      hash: createHash("sha256").update(normalizedFactorySource).digest("hex"),
       importPath: `./${entry.name}/${path.basename(manifest.factoryFile, ".ts")}`,
     });
   }
