@@ -90,16 +90,18 @@ export function BedroomViewport(props: Props) {
     const updateCamera = () => {
       const current = propsRef.current;
       const { width, depth } = current.room.dimensions;
-      target.set(width / 2, 0, depth / 2);
+      const sceneWidth = width + (current.room.bayWindow?.side === "right" ? current.room.bayWindow.depth : 0);
+      const sceneDepth = depth + (current.room.bayWindow?.side === "bottom" ? current.room.bayWindow.depth : 0);
+      target.set(sceneWidth / 2, 0, sceneDepth / 2);
       if (current.viewMode === "top") {
         camera = orthographic;
-        const span = Math.max(width, depth) * 0.72;
+        const span = Math.max(sceneWidth, sceneDepth) * 0.72;
         const aspect = Math.max(0.5, host.clientWidth / Math.max(1, host.clientHeight));
         orthographic.left = -span * aspect;
         orthographic.right = span * aspect;
         orthographic.top = span;
         orthographic.bottom = -span;
-        orthographic.position.set(width / 2, 10000, depth / 2);
+        orthographic.position.set(sceneWidth / 2, 10000, sceneDepth / 2);
         orthographic.up.set(0, 0, -1);
         orthographic.lookAt(target);
         orthographic.updateProjectionMatrix();
@@ -126,14 +128,18 @@ export function BedroomViewport(props: Props) {
       floor.receiveShadow = true;
       world.add(floor);
       if (current.showGrid) {
-        const grid = new THREE.GridHelper(Math.max(width, depth) * 1.5, Math.ceil(Math.max(width, depth) / 200), "#aaa49a", "#d3cec5");
-        grid.position.set(width / 2, 4, depth / 2);
+        const sceneWidth = width + (current.room.bayWindow?.side === "right" ? current.room.bayWindow.depth : 0);
+        const sceneDepth = depth + (current.room.bayWindow?.side === "bottom" ? current.room.bayWindow.depth : 0);
+        const gridSize = Math.max(sceneWidth, sceneDepth) * 1.5;
+        const grid = new THREE.GridHelper(gridSize, Math.ceil(gridSize / 200), "#aaa49a", "#d3cec5");
+        grid.position.set(sceneWidth / 2, 4, sceneDepth / 2);
         grid.material.opacity = 0.52;
         grid.material.transparent = true;
         world.add(grid);
       }
       if (current.showWalls) {
-        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#f1eee6", roughness: 0.88, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: "#eee8dc", roughness: 0.9, transparent: true, opacity: 0.72, depthWrite: true, side: THREE.DoubleSide });
+        const wallEdgeMaterial = new THREE.LineBasicMaterial({ color: "#9f9688", transparent: true, opacity: 0.58 });
         const addWall = (a: { x: number; z: number }, b: { x: number; z: number }, wallHeight = height, centerY = wallHeight / 2) => {
           const length = Math.hypot(b.x - a.x, b.z - a.z);
           if (length < 1 || wallHeight < 1) return;
@@ -142,6 +148,11 @@ export function BedroomViewport(props: Props) {
           wall.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
           wall.receiveShadow = true;
           world.add(wall);
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(wall.geometry), wallEdgeMaterial.clone());
+          edges.position.copy(wall.position);
+          edges.rotation.copy(wall.rotation);
+          edges.userData.decorative = true;
+          world.add(edges);
         };
         current.room.outline.forEach((point, index) => {
           const next = current.room.outline[(index + 1) % current.room.outline.length];
@@ -153,6 +164,17 @@ export function BedroomViewport(props: Props) {
           let spans: Array<[number, number]> = [[start, end]];
           (current.room.doors ?? []).filter((door) => door.wallAxis === axis && door.wallCoordinate === coordinate).forEach((door) => {
             const openingEnd = door.openingStart + door.width;
+            const overlapStart = Math.max(start, door.openingStart);
+            const overlapEnd = Math.min(end, openingEnd);
+            if (overlapEnd > overlapStart) {
+              const lintelHeight = Math.max(0, height - 2100);
+              addWall(
+                horizontal ? { x: overlapStart, z: coordinate } : { x: coordinate, z: overlapStart },
+                horizontal ? { x: overlapEnd, z: coordinate } : { x: coordinate, z: overlapEnd },
+                lintelHeight,
+                2100 + lintelHeight / 2,
+              );
+            }
             spans = spans.flatMap(([from, to]) => {
               if (openingEnd <= from || door.openingStart >= to) return [[from, to]];
               const pieces: Array<[number, number]> = [];
@@ -175,7 +197,7 @@ export function BedroomViewport(props: Props) {
               if (openingEnd < to) pieces.push([openingEnd, to]);
               return pieces;
             });
-            const windowHeight = Math.min(1500, Math.max(600, height - bay.sillHeight - 300));
+            const windowHeight = Math.max(600, height - bay.sillHeight - 300);
             const windowTop = bay.sillHeight + windowHeight;
             const openingStartPoint = horizontal ? { x: bay.start, z: coordinate } : { x: coordinate, z: bay.start };
             const openingEndPoint = horizontal ? { x: openingEnd, z: coordinate } : { x: coordinate, z: openingEnd };
@@ -193,7 +215,7 @@ export function BedroomViewport(props: Props) {
         const bayGeometry = bay.side === "bottom"
           ? new THREE.BoxGeometry(bay.length, bay.sillHeight, bay.depth)
           : new THREE.BoxGeometry(bay.depth, bay.sillHeight, bay.length);
-        const bayMesh = new THREE.Mesh(bayGeometry, new THREE.MeshStandardMaterial({ color: "#cbd4dc", roughness: 0.76, transparent: true, opacity: 0.58, depthWrite: false }));
+        const bayMesh = new THREE.Mesh(bayGeometry, new THREE.MeshStandardMaterial({ color: "#d8d0c3", roughness: 0.82 }));
         bayMesh.position.set(
           bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth / 2,
           bay.sillHeight / 2,
@@ -201,7 +223,13 @@ export function BedroomViewport(props: Props) {
         );
         world.add(bayMesh);
 
-        const glassHeight = Math.min(1500, Math.max(600, height - bay.sillHeight - 300));
+        bayMesh.castShadow = true;
+        bayMesh.receiveShadow = true;
+        const bayEdges = new THREE.LineSegments(new THREE.EdgesGeometry(bayGeometry), new THREE.LineBasicMaterial({ color: "#8d8478" }));
+        bayEdges.position.copy(bayMesh.position);
+        world.add(bayEdges);
+
+        const glassHeight = Math.max(600, height - bay.sillHeight - 300);
         const glassMaterial = new THREE.MeshPhysicalMaterial({
           color: "#d9f1f5",
           transparent: true,
@@ -213,14 +241,22 @@ export function BedroomViewport(props: Props) {
           side: THREE.DoubleSide,
         });
         const frameMaterial = new THREE.MeshStandardMaterial({ color: "#8b989c", roughness: 0.42, transparent: true, opacity: 0.72 });
-        const glass = new THREE.Mesh(
-          bay.side === "bottom" ? new THREE.BoxGeometry(bay.length, glassHeight, 18) : new THREE.BoxGeometry(18, glassHeight, bay.length),
-          glassMaterial,
-        );
         const glassX = bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth;
         const glassZ = bay.side === "bottom" ? depth + bay.depth : bay.start + bay.length / 2;
-        glass.position.set(glassX, bay.sillHeight + glassHeight / 2, glassZ);
-        world.add(glass);
+        const addGlassPanel = (panelWidth: number, panelDepth: number, x: number, z: number) => {
+          const panel = new THREE.Mesh(new THREE.BoxGeometry(panelWidth, glassHeight, panelDepth), glassMaterial.clone());
+          panel.position.set(x, bay.sillHeight + glassHeight / 2, z);
+          world.add(panel);
+        };
+        if (bay.side === "bottom") {
+          addGlassPanel(bay.length, 18, glassX, glassZ);
+          addGlassPanel(18, bay.depth, bay.start, depth + bay.depth / 2);
+          addGlassPanel(18, bay.depth, bay.start + bay.length, depth + bay.depth / 2);
+        } else {
+          addGlassPanel(18, bay.length, glassX, glassZ);
+          addGlassPanel(bay.depth, 18, width + bay.depth / 2, bay.start);
+          addGlassPanel(bay.depth, 18, width + bay.depth / 2, bay.start + bay.length);
+        }
 
         const addFrame = (frameWidth: number, frameHeight: number, x: number, y: number, z: number) => {
           const frame = new THREE.Mesh(
@@ -235,6 +271,31 @@ export function BedroomViewport(props: Props) {
         for (const offset of [-bay.length / 2, 0, bay.length / 2]) {
           addFrame(48, glassHeight, bay.side === "bottom" ? glassX + offset : glassX, bay.sillHeight + glassHeight / 2, bay.side === "bottom" ? glassZ : glassZ + offset);
         }
+        const returnFrameGeometry = bay.side === "bottom"
+          ? new THREE.BoxGeometry(48, glassHeight, bay.depth)
+          : new THREE.BoxGeometry(bay.depth, glassHeight, 48);
+        for (const end of [bay.start, bay.start + bay.length]) {
+          const returnFrame = new THREE.Mesh(returnFrameGeometry, frameMaterial.clone());
+          returnFrame.position.set(
+            bay.side === "bottom" ? end : width + bay.depth / 2,
+            bay.sillHeight + glassHeight / 2,
+            bay.side === "bottom" ? depth + bay.depth / 2 : end,
+          );
+          world.add(returnFrame);
+        }
+        const headerHeight = Math.max(80, height - bay.sillHeight - glassHeight);
+        const headerGeometry = bay.side === "bottom"
+          ? new THREE.BoxGeometry(bay.length, headerHeight, bay.depth)
+          : new THREE.BoxGeometry(bay.depth, headerHeight, bay.length);
+        const header = new THREE.Mesh(headerGeometry, new THREE.MeshStandardMaterial({ color: "#eee8dc", roughness: 0.9 }));
+        header.position.set(
+          bay.side === "bottom" ? bay.start + bay.length / 2 : width + bay.depth / 2,
+          bay.sillHeight + glassHeight + headerHeight / 2,
+          bay.side === "bottom" ? depth + bay.depth / 2 : bay.start + bay.length / 2,
+        );
+        header.castShadow = true;
+        header.receiveShadow = true;
+        world.add(header);
       }
       const zoneMaterial = new THREE.MeshBasicMaterial({ color: "#df8d55", transparent: true, opacity: 0.18, depthWrite: false });
       current.room.keepOutZones.forEach((zone) => {
@@ -448,9 +509,9 @@ export function BedroomViewport(props: Props) {
 }
 
 function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, onSelect, onToggleDoor, onInteractItem }: Props) {
-  const pad = 280;
-  const outline = room.outline.map((point) => `${point.x},${point.z}`).join(" ");
   const bay = room.bayWindow;
+  const pad = Math.max(280, (bay?.depth ?? 0) + 120);
+  const outline = room.outline.map((point) => `${point.x},${point.z}`).join(" ");
   return (
     <div className="three-viewport fallback-viewport" aria-label={`${room.name}平面兼容布局画布`}>
       <div className="fallback-notice">
@@ -470,13 +531,21 @@ function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, on
         </defs>
         <polygon points={outline} fill="#faf7ef" stroke="#aaa399" strokeWidth="32" />
         <polygon points={outline} fill="url(#fallback-grid)" />
-        {bay && <rect
-          x={bay.side === "bottom" ? bay.start : room.dimensions.width}
-          y={bay.side === "bottom" ? room.dimensions.depth : bay.start}
-          width={bay.side === "bottom" ? bay.length : bay.depth}
-          height={bay.side === "bottom" ? bay.depth : bay.length}
-          fill="#d5eef2" fillOpacity=".24" stroke="#7c8992" strokeWidth="18"
-        />}
+        {bay && <g className="fallback-bay-window">
+          <rect
+            x={bay.side === "bottom" ? bay.start : room.dimensions.width}
+            y={bay.side === "bottom" ? room.dimensions.depth : bay.start}
+            width={bay.side === "bottom" ? bay.length : bay.depth}
+            height={bay.side === "bottom" ? bay.depth : bay.length}
+            fill="#d8d0c3" stroke="#7c8992" strokeWidth="24"
+          />
+          <text
+            x={bay.side === "bottom" ? bay.start + bay.length / 2 : room.dimensions.width + bay.depth / 2}
+            y={bay.side === "bottom" ? room.dimensions.depth + bay.depth / 2 : bay.start + bay.length / 2}
+            textAnchor="middle"
+            className="fallback-zone-label"
+          >飘窗台 H{bay.sillHeight}</text>
+        </g>}
         {room.keepOutZones.map((zone) => <g key={zone.id}>
           <rect x={zone.x} y={zone.z} width={zone.width} height={zone.depth} fill="#df8d55" fillOpacity=".18" stroke="#cf7846" strokeWidth="14" strokeDasharray="46 30" />
           <text x={zone.x + zone.width / 2} y={zone.z + zone.depth / 2} textAnchor="middle" className="fallback-zone-label">{zone.label}</text>

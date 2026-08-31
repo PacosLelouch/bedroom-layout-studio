@@ -147,7 +147,6 @@ const BUILTIN_ASSET_CATALOG: CatalogAsset[] = [
   { id: "sliding-wardrobe", name: "推拉门衣柜", category: "storage", size: { width: 1800, depth: 650, height: 2400 }, color: "#c8b696", factory: slidingWardrobeFactory, source: "builtin" },
   { id: "desk", name: "书桌", category: "desk", size: { width: 1200, depth: 600, height: 750 }, color: "#a98d69", factory: deskFactory, source: "builtin" },
   { id: "vanity", name: "梳妆台", category: "desk", size: { width: 1050, depth: 450, height: 750 }, color: "#aa8b69", factory: deskFactory, source: "builtin" },
-  { id: "wall-cabinet", name: "吊书柜", category: "storage", size: { width: 1000, depth: 300, height: 700 }, color: "#c5ad8c", factory: simpleFactory, source: "builtin" },
   { id: "bay-cabinet", name: "飘窗摆柜", category: "storage", size: { width: 1000, depth: 300, height: 700 }, color: "#c5ad8c", factory: simpleFactory, source: "builtin" },
   { id: "entry-cabinet", name: "收纳薄柜", category: "storage", size: { width: 800, depth: 350, height: 2200 }, color: "#bda989", factory: simpleFactory, source: "builtin" },
   { id: "nightstand", name: "床头柜", category: "storage", size: { width: 480, depth: 420, height: 520 }, color: "#b99f7c", factory: simpleFactory, source: "builtin" },
@@ -186,15 +185,22 @@ export function createAssetGroup(item: FurnitureItem) {
 
 export function catalogItemToFurniture(assetId: string, room: RoomLayout): FurnitureItem {
   const asset = ASSET_CATALOG.find((entry) => entry.id === assetId) ?? ASSET_CATALOG[0];
+  const useBaySill = asset.id === "bay-cabinet" && room.bayWindow;
+  const position = useBaySill
+    ? room.bayWindow!.side === "bottom"
+      ? { x: room.bayWindow!.start + room.bayWindow!.length / 2, z: room.dimensions.depth + asset.size.depth / 2 }
+      : { x: room.dimensions.width + asset.size.depth / 2, z: room.bayWindow!.start + room.bayWindow!.length / 2 }
+    : { x: room.dimensions.width / 2, z: room.dimensions.depth / 2 };
   return {
     id: `${asset.id}-${Date.now()}`,
     assetId: asset.id,
     name: asset.name,
-    position: { x: room.dimensions.width / 2, z: room.dimensions.depth / 2 },
-    rotation: 0,
+    position,
+    rotation: useBaySill && room.bayWindow!.side === "right" ? 90 : 0,
     size: { ...asset.size },
     color: asset.color,
-    wallMounted: asset.id === "wall-cabinet",
+    supportSurface: useBaySill ? "bay-window" : "floor",
+    baseHeight: useBaySill ? room.bayWindow!.sillHeight : 0,
     clearanceDepth: asset.id === "wardrobe" ? asset.size.width / 2 : undefined,
     clearanceLabel: asset.id === "wardrobe" ? `双开门开启区 ${asset.size.width / 2}` : undefined,
     interactionState: ["wardrobe", "sliding-wardrobe", "sofa-bed"].includes(asset.id) ? "closed" : undefined,

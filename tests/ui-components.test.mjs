@@ -167,3 +167,16 @@ test("uses the bay sill as support instead of floating cabinets", async () => {
     assert.equal(cabinet.wallMounted, undefined);
   }
 });
+
+test("does not offer an unsupported floating cabinet and anchors new bay cabinets", async () => {
+  const { INITIAL_ROOMS } = await vite.ssrLoadModule("/lib/bedroom/room-layouts.ts");
+  const catalog = await vite.ssrLoadModule("/lib/bedroom/asset-registry.ts");
+  const room = INITIAL_ROOMS.find((entry) => entry.id === "small-secondary");
+  const cabinet = catalog.catalogItemToFurniture("bay-cabinet", room);
+
+  assert.equal(catalog.ASSET_CATALOG.some((asset) => asset.id === "wall-cabinet"), false);
+  assert.equal(cabinet.supportSurface, "bay-window");
+  assert.equal(cabinet.baseHeight, room.bayWindow.sillHeight);
+  assert.equal(cabinet.rotation, 90);
+  assert.equal(cabinet.position.x, room.dimensions.width + cabinet.size.depth / 2);
+});
