@@ -103,6 +103,8 @@ export function BedroomViewport(props: Props) {
     const cameraStates = new Map<string, { azimuth: number; elevation: number; distance: number; topZoom: number }>();
     const prewarmedAssets = new Set<string>();
     let idleHandle: number | null = null;
+    const requestIdle = window.requestIdleCallback?.bind(window);
+    const cancelIdle = window.cancelIdleCallback?.bind(window);
     let changeFrame: number | null = null;
     let pendingChange: { id: string; patch: Partial<FurnitureItem>; recordHistory: boolean } | null = null;
     const flushItemChange = () => {
@@ -456,7 +458,7 @@ export function BedroomViewport(props: Props) {
           const assetIds = [...new Set(current.rooms!.filter((room) => room.id !== activeRoomId).flatMap((room) => room.items.map((item) => item.assetId)))].filter((id) => !prewarmedAssets.has(id));
           assetIds.forEach((id) => { prewarmedAssets.add(id); void loadFurnitureRuntime(id).catch(() => prewarmedAssets.delete(id)); });
         };
-        idleHandle = "requestIdleCallback" in window ? window.requestIdleCallback(prewarm, { timeout: 1200 }) : window.setTimeout(prewarm, 250);
+        idleHandle = requestIdle ? requestIdle(prewarm, { timeout: 1200 }) : window.setTimeout(prewarm, 250);
       }
     };
 
@@ -684,7 +686,7 @@ export function BedroomViewport(props: Props) {
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       changeFrame = null; pendingChange = null;
       controller.dispose();
-      if (idleHandle !== null) { if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleHandle); else window.clearTimeout(idleHandle); }
+      if (idleHandle !== null) { if (cancelIdle) cancelIdle(idleHandle); else window.clearTimeout(idleHandle); }
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);

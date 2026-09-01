@@ -11,7 +11,7 @@
     "assets:check": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/sync-furniture-assets.mjs --check",
     "dev": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/sync-furniture-assets.mjs && vite",
     "build": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && bash scripts/build-verified.sh \"%npm_node_execpath%\"",
-    "build:pages": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/build-github-pages.mjs",
+    "build:pages": "node scripts/build-github-pages.mjs",
     "preview": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/preview-built.mjs",
     "start": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/start-front.mjs",
     "test": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && npm run build",
