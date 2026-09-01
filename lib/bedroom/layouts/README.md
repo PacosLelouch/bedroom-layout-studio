@@ -82,7 +82,9 @@ layouts/
   "position": { "x": 900, "z": 4000 },
   "rotation": 0,
   "size": { "width": 1800, "depth": 2100, "height": 520 },
-  "color": "#d9cbb9"
+  "color": "#d9cbb9",
+  "parameterValues": {},
+  "stateId": null
 }
 ```
 
@@ -95,6 +97,8 @@ layouts/
 - `rotation`：绕 Y 轴旋转角度。
 - `size`：`width`、`depth`、`height`，均为正数。
 - `color`：CSS 颜色字符串，推荐六位十六进制颜色。
+- `parameterValues`：当前家具实例的参数值；没有特殊参数时使用空对象。
+- `stateId`：当前有限状态 ID；没有状态时使用 `null`。状态必须由 `assetId` 对应的家具 manifest 声明。
 
 可选字段：
 
@@ -102,14 +106,27 @@ layouts/
 - `supportSurface`：家具承托面，可为房间地面、飘窗台或墙面；飘窗摆柜应使用 `bay-window`，并完整落在飘窗范围内。
 - `baseHeight`：家具底面标高；飘窗摆柜通常等于飘窗台高度，不能用墙面吊装标高代替。
 - `clearanceDepth`、`clearanceLabel`：柜门或操作净空及其说明。
-- `interactionState`：只能是 `open` 或 `closed`。
-- `collapsedDepth`、`expandedDepth`：折叠家具收起/展开进深。
-- `collapsedWidth`、`expandedWidth`：折叠家具收起/展开宽度。
-- `collapsedPositionX`、`expandedPositionX`：折叠状态切换时的横向中心点，用于保持靠墙边缘不动。
-- `loweredHeight`、`raisedHeight`：升降桌等家具的标准高度和升高状态；`interactionState` 为 `closed` 时使用标准高度，为 `open` 时使用升高高度。
+- `presetId`：创建该实例时使用的家具预制体 ID；预制体失效不会改变实例已保存的配置。
 
 编辑器的“轮廓”模式通过拖拽墙段中点来平移整段墙，并同步同一墙段上的门和门区；这种方式会保持原有正交墙体，不会因单独拖动一个角点产生斜墙。调整后仍需检查家具、飘窗和固定设施是否落在新轮廓内。
-- `collapsedPositionZ`、`expandedPositionZ`：折叠家具两种状态的 Z 坐标。
+
+### 旧版家具字段兼容
+
+版本 1 布局可能把 `interactionState`、`loweredHeight`、`raisedHeight`、`collapsedDepth`、`expandedDepth`、`collapsedWidth`、`expandedWidth`、`collapsedPositionX/Z` 和 `expandedPositionX/Z` 直接写在家具顶层。读取器仍接受这些字段，并将它们规范化为 `stateId` 和 `parameterValues`，但保存和重新导出时不会继续输出旧字段。
+
+新增或修改布局时使用当前格式，不要继续创建旧字段。例如升降桌应写成：
+
+```json
+{
+  "parameterValues": {
+    "loweredHeight": 750,
+    "raisedHeight": 1100
+  },
+  "stateId": "closed"
+}
+```
+
+布局实例只保存当前配置，不复制状态定义、参数定义、组件或运行时行为；这些能力由 `assetId` 对应的统一家具 manifest 决定。只有有效 `approved` 资产出现在正式家具目录中，`draft`、`candidate` 和 `archived` 资产不能作为新的正式家具加入布局。
 
 ### 禁放区 `keepOutZones` 格式
 
@@ -166,17 +183,25 @@ layouts/
 
 “读取方案”既可以恢复浏览器方案，也可以导入此前另存的 JSON 副本。两种来源使用完全相同的快照格式和校验规则。
 
-浏览器存储键：
+当前浏览器存储键：
 
 ```text
-key: bedroom-layout-studio.layout.v1
+key: bedroom-layout-studio.layout.v2
 ```
+
+兼容读取的旧版存储键：
+
+```text
+legacy key: bedroom-layout-studio.layout.v1
+```
+
+读取旧键中的 v1 快照时会先迁移为 v2；后续保存统一写入当前的 v2 存储键。
 
 快照格式：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "browser-layout",
   "name": "我的卧室布局",
   "savedAt": "2026-08-31T12:00:00.000Z",
@@ -184,10 +209,10 @@ key: bedroom-layout-studio.layout.v1
 }
 ```
 
-`rooms` 中的每一项都使用本文前面描述的单房间格式。“读取方案”会解析 JSON、校验 `schemaVersion` 和全部房间字段，然后替换当前布局；读取前的布局会进入撤销历史。界面新增的空房间也会出现在 `rooms` 中。
+`rooms` 中的每一项都使用本文前面描述的单房间格式。“读取方案”会解析 JSON、校验 `schemaVersion` 和全部房间字段，然后替换当前布局；读取前的布局会进入撤销历史。界面新增的空房间也会出现在 `rooms` 中。版本 1 快照仍可导入，读取时会把旧家具状态和参数迁移为版本 2 格式。
 
 浏览器保存仅对当前浏览器、当前设备和当前站点地址有效。清除站点数据、使用另一台设备或更换域名后不会自动同步。要实现账号间或设备间同步，应在保持相同快照协议的基础上接入服务端数据库，不要让浏览器直接修改本目录文件。
 
 ## 协议版本
 
-当前版本为 `schemaVersion: 1`。如果未来修改运行时快照的字段含义或做不兼容变更，应递增版本并提供迁移逻辑；不要悄悄复用版本 1 表示另一种结构。
+当前正式输出版本为 `schemaVersion: 2`；`schemaVersion: 1` 仅作为兼容输入。版本 2 使用 `stateId` 和 `parameterValues` 表示家具配置。如果未来修改运行时快照的字段含义或做不兼容变更，应继续递增版本并提供迁移逻辑；不要复用旧版本号表示另一种结构。

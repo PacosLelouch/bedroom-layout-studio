@@ -15,7 +15,7 @@ git submodule update --init --recursive
 
 生成资产使用 manifest schema v3。`draft` 表示技术准备不完整；`candidate` 表示可靠尺寸、
 默认配置、状态、参数、组件、GLB 导出重载和当前哈希证据全部通过；`approved` 表示用户在
-`/asset-review?asset=<asset-id>` 完成外观确认。只有有效 approved 资产进入家具面板。
+`/furniture-review?asset=<asset-id>` 完成外观确认；旧 `/asset-review` 地址只作为兼容入口保留。只有有效 approved 资产进入家具面板。
 
 图片不能独立提供可信毫米尺寸。任何 factory、wrapper 或能力修改都会使旧证据过期，资产
 有效状态自动回到 draft，完成候选准入后才能再次成为 candidate。

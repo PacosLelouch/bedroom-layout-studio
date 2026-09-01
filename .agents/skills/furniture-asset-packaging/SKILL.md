@@ -42,7 +42,8 @@ for metadata, capability mapping, or a bounded edit to an existing factory.
   and pivot names, portable PBR/vertex-color/texture properties, and source/reload appearance.
 - Run `scripts/admit_furniture_candidate.mjs` with the package scope only after material and appearance evidence has been
   inspected. It is the successful path to `candidate`.
-- Use `/asset-review?asset=<asset-id>` for user approval after candidate admission.
+- Use `/furniture-review?asset=<asset-id>` for user approval after candidate admission. The old
+  `/asset-review` route is compatibility-only.
 
 Before authoring or changing an asset, read [the furniture asset contract](references/furniture-asset-contract.md).
 For admission read [candidate readiness](references/candidate-readiness.md). For existing-asset
