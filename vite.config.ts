@@ -8,6 +8,12 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
 
 const { d1, r2 } = hostingConfig;
+// Chromium blocks port 6666; use a distinct browser-safe project default.
+const webPort = Number(process.env.WEB_PORT ?? process.env.PORT ?? 5555);
+
+if (!Number.isInteger(webPort) || webPort < 1 || webPort > 65_535) {
+  throw new Error("WEB_PORT/PORT must be an integer between 1 and 65535.");
+}
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -47,10 +53,19 @@ export default defineConfig(async () => {
   return {
     server: {
       host: "0.0.0.0",
+      port: webPort,
+      // A second dev server would race the same dependency optimizer cache on Windows.
+      strictPort: true,
       allowedHosts: ["terminal.local"],
-      ...(isCodexSeatbeltSandbox
-        ? { watch: { useFsEvents: false, usePolling: true } }
-        : {}),
+      watch: {
+        // Skip environment-managed / external dirs. `.agents` is git-ignored and
+        // may contain symlinks (e.g. skills) that Windows `node` cannot resolve,
+        // which would otherwise crash the dev server's file watcher on startup.
+        ignored: ["**/node_modules/**", "**/.git/**", "**/.agents/**"],
+        ...(isCodexSeatbeltSandbox
+          ? { useFsEvents: false, usePolling: true }
+          : {}),
+      },
     },
     plugins: [
       assetReviewWriter(),
@@ -62,5 +77,10 @@ export default defineConfig(async () => {
         config: localBindingConfig,
       }),
     ],
+    preview: {
+      host: "0.0.0.0",
+      port: webPort,
+      strictPort: true,
+    },
   };
 });

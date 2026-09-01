@@ -40,6 +40,7 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+/.workbuddy/
 
 # NOTE: .agents/skills/img2threejs is now tracked as a git submodule
 # (see `git submodule add`). It is no longer an ignored local junction.

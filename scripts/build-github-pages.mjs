@@ -21,7 +21,7 @@ if (basePath && !basePath.startsWith("/")) {
 }
 
 const nextCli = resolve("node_modules", "next", "dist", "bin", "next");
-const registryCheck = spawnSync(process.execPath, [resolve("scripts", "sync-generated-assets.mjs"), "--check"], {
+const registryCheck = spawnSync(process.execPath, [resolve("scripts", "sync-furniture-assets.mjs"), "--check"], {
   stdio: "inherit",
 });
 if (registryCheck.status !== 0) {

@@ -7,7 +7,10 @@ import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const clientRoot = path.resolve(root, "dist", "client");
-const port = Number(process.env.PORT ?? process.argv[2] ?? 4173);
+const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? process.argv[2] ?? 5555);
+if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  throw new Error("WEB_PORT/PORT/port argument must be an integer between 1 and 65535.");
+}
 const worker = (await import(pathToFileURL(path.resolve(root, "dist", "server", "index.js")).href)).default;
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],

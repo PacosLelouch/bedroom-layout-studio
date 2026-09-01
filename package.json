@@ -6,17 +6,17 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "install:ci": "bash scripts/install-ci.sh",
-    "assets:sync": "node scripts/sync-generated-assets.mjs",
-    "assets:check": "node scripts/sync-generated-assets.mjs --check",
-    "dev": "node scripts/sync-generated-assets.mjs && vite",
-    "build": "bash scripts/build-verified.sh",
-    "build:pages": "node scripts/build-github-pages.mjs",
-    "preview": "node scripts/preview-built.mjs",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/*.test.mjs",
-    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+    "install:ci": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && bash scripts/install-ci.sh",
+    "assets:sync": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/sync-furniture-assets.mjs",
+    "assets:check": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/sync-furniture-assets.mjs --check",
+    "dev": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/sync-furniture-assets.mjs && vite",
+    "build": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && bash scripts/build-verified.sh",
+    "build:pages": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/build-github-pages.mjs",
+    "preview": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/preview-built.mjs",
+    "start": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && node scripts/start-front.mjs",
+    "test": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && npm run build && node --test tests/*.test.mjs",
+    "lint": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "set PATH=C:\\Users\\lamaliang\\.workbuddy\\binaries\\node\\versions\\22.22.2;%PATH% && bash scripts/sites-env.sh -- drizzle-kit generate"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

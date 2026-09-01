@@ -19,9 +19,15 @@ if [[ ! -x "${vinext}" ]]; then
 fi
 
 echo "Running bounded vinext build..."
-node "${SITES_PROJECT_ROOT}/scripts/sync-generated-assets.mjs" --check
+node "${SITES_PROJECT_ROOT}/scripts/sync-furniture-assets.mjs" --check
 timeout \
   --signal=TERM \
   --kill-after="${SITES_BUILD_KILL_AFTER:-10s}" \
   "${SITES_BUILD_TIMEOUT:-3m}" \
   "${vinext}" build
+
+echo "Checking client chunk boundaries and size budgets..."
+node "${SITES_PROJECT_ROOT}/scripts/check-client-budgets.mjs"
+
+echo "Running automated tests..."
+node --test "${SITES_PROJECT_ROOT}"/tests/*.test.mjs
