@@ -106,6 +106,9 @@ layouts/
 - `collapsedDepth`、`expandedDepth`：折叠家具收起/展开进深。
 - `collapsedWidth`、`expandedWidth`：折叠家具收起/展开宽度。
 - `collapsedPositionX`、`expandedPositionX`：折叠状态切换时的横向中心点，用于保持靠墙边缘不动。
+- `loweredHeight`、`raisedHeight`：升降桌等家具的标准高度和升高状态；`interactionState` 为 `closed` 时使用标准高度，为 `open` 时使用升高高度。
+
+编辑器的“轮廓”模式通过拖拽墙段中点来平移整段墙，并同步同一墙段上的门和门区；这种方式会保持原有正交墙体，不会因单独拖动一个角点产生斜墙。调整后仍需检查家具、飘窗和固定设施是否落在新轮廓内。
 - `collapsedPositionZ`、`expandedPositionZ`：折叠家具两种状态的 Z 坐标。
 
 ### 禁放区 `keepOutZones` 格式

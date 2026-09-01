@@ -1,10 +1,41 @@
 export type ViewMode = "top" | "perspective";
-export type InteractionMode = "interact" | "move" | "rotate";
+export type InteractionMode = "interact" | "move" | "rotate" | "outline";
 
 export interface Dimensions3D {
   width: number;
   depth: number;
   height: number;
+}
+
+export type FurnitureParameterValue = number | boolean | string;
+
+export interface FurnitureDimensionConstraint {
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export interface FurnitureDimensionConstraints {
+  width?: FurnitureDimensionConstraint;
+  depth?: FurnitureDimensionConstraint;
+  height?: FurnitureDimensionConstraint;
+}
+
+export type FurnitureParameterDefinition =
+  | { id: string; label: string; type: "number"; defaultValue: number; min?: number; max?: number; step?: number; unit?: string }
+  | { id: string; label: string; type: "boolean"; defaultValue: boolean }
+  | { id: string; label: string; type: "enum"; defaultValue: string; options: Array<{ value: string; label: string }> }
+  | { id: string; label: string; type: "color"; defaultValue: string };
+
+export interface FurnitureStateDefinition {
+  id: string;
+  label: string;
+}
+
+export interface FurnitureConfiguration {
+  dimensions: Dimensions3D;
+  parameters: Record<string, FurnitureParameterValue>;
+  stateId: string | null;
 }
 
 export interface FurnitureItem {
@@ -20,15 +51,9 @@ export interface FurnitureItem {
   baseHeight?: number;
   clearanceDepth?: number;
   clearanceLabel?: string;
-  interactionState?: "open" | "closed";
-  collapsedDepth?: number;
-  expandedDepth?: number;
-  collapsedWidth?: number;
-  expandedWidth?: number;
-  collapsedPositionX?: number;
-  expandedPositionX?: number;
-  collapsedPositionZ?: number;
-  expandedPositionZ?: number;
+  parameterValues: Record<string, FurnitureParameterValue>;
+  stateId: string | null;
+  presetId?: string;
 }
 
 export interface PlanPoint {
@@ -81,16 +106,20 @@ export interface RoomLayout {
 }
 
 export interface LayoutSnapshot {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: string;
   name: string;
   savedAt: string;
   rooms: RoomLayout[];
 }
 
-export interface ProceduralAssetOptions {
-  dimensions: Dimensions3D;
-  color?: string;
-  seed?: number;
-  exploded?: boolean;
+export interface FurniturePreset {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  assetId: string;
+  assetRevision: string;
+  createdAt: string;
+  updatedAt: string;
+  configuration: FurnitureConfiguration;
 }

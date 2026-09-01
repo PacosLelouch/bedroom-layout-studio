@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LayoutSnapshot, RoomLayout } from "./types";
+import type { FurnitureItem, LayoutSnapshot, RoomLayout } from "./types";
 
 const dimensionsSchema = z.object({
   width: z.number().positive(),
@@ -9,7 +9,9 @@ const dimensionsSchema = z.object({
 
 const planPointSchema = z.object({ x: z.number(), z: z.number() }).strict();
 
-const furnitureItemSchema = z.object({
+const parameterValueSchema = z.union([z.number().finite(), z.boolean(), z.string()]);
+
+const furnitureItemInputSchema = z.object({
   id: z.string().min(1),
   assetId: z.string().min(1),
   name: z.string().min(1),
@@ -22,7 +24,13 @@ const furnitureItemSchema = z.object({
   baseHeight: z.number().nonnegative().optional(),
   clearanceDepth: z.number().nonnegative().optional(),
   clearanceLabel: z.string().min(1).optional(),
+  parameterValues: z.record(z.string(), parameterValueSchema).optional(),
+  stateId: z.string().min(1).nullable().optional(),
+  presetId: z.string().min(1).optional(),
+  // Version 1 compatibility fields. They are normalized and never emitted again.
   interactionState: z.enum(["open", "closed"]).optional(),
+  loweredHeight: z.number().positive().optional(),
+  raisedHeight: z.number().positive().optional(),
   collapsedDepth: z.number().positive().optional(),
   expandedDepth: z.number().positive().optional(),
   collapsedWidth: z.number().positive().optional(),
@@ -32,6 +40,41 @@ const furnitureItemSchema = z.object({
   collapsedPositionZ: z.number().optional(),
   expandedPositionZ: z.number().optional(),
 }).strict();
+
+function normalizeFurnitureItem(input: z.infer<typeof furnitureItemInputSchema>): FurnitureItem {
+  const {
+    interactionState,
+    loweredHeight,
+    raisedHeight,
+    collapsedDepth,
+    expandedDepth,
+    collapsedWidth,
+    expandedWidth,
+    collapsedPositionX,
+    expandedPositionX,
+    collapsedPositionZ,
+    expandedPositionZ,
+    ...item
+  } = input;
+  const parameters = { ...(item.parameterValues ?? {}) };
+  if (loweredHeight !== undefined) parameters.loweredHeight = loweredHeight;
+  if (raisedHeight !== undefined) parameters.raisedHeight = raisedHeight;
+  if (collapsedDepth !== undefined) parameters.collapsedDepth = collapsedDepth;
+  if (expandedDepth !== undefined) parameters.expandedDepth = expandedDepth;
+  if (collapsedWidth !== undefined) parameters.collapsedWidth = collapsedWidth;
+  if (expandedWidth !== undefined) parameters.expandedWidth = expandedWidth;
+  if (collapsedPositionX !== undefined) parameters.collapsedPositionX = collapsedPositionX;
+  if (expandedPositionX !== undefined) parameters.expandedPositionX = expandedPositionX;
+  if (collapsedPositionZ !== undefined) parameters.collapsedPositionZ = collapsedPositionZ;
+  if (expandedPositionZ !== undefined) parameters.expandedPositionZ = expandedPositionZ;
+  return {
+    ...item,
+    parameterValues: parameters,
+    stateId: item.stateId ?? interactionState ?? null,
+  };
+}
+
+const furnitureItemSchema = furnitureItemInputSchema.transform(normalizeFurnitureItem);
 
 const keepOutZoneSchema = z.object({
   id: z.string().min(1),
@@ -77,7 +120,15 @@ export const roomLayoutSchema = z.object({
   items: z.array(furnitureItemSchema),
 }).strict();
 
-export const layoutSnapshotSchema = z.object({
+const layoutSnapshotV2Schema = z.object({
+  schemaVersion: z.literal(2),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  savedAt: z.string().datetime(),
+  rooms: z.array(roomLayoutSchema).min(1),
+}).strict();
+
+const layoutSnapshotV1Schema = z.object({
   schemaVersion: z.literal(1),
   id: z.string().min(1),
   name: z.string().min(1),
@@ -99,7 +150,12 @@ export function parseRoomLayouts(value: unknown): RoomLayout[] {
 }
 
 export function parseLayoutSnapshot(value: unknown): LayoutSnapshot {
-  return layoutSnapshotSchema.parse(value) as LayoutSnapshot;
+  const version = value && typeof value === "object" ? (value as { schemaVersion?: unknown }).schemaVersion : undefined;
+  if (version === 1) {
+    const legacy = layoutSnapshotV1Schema.parse(value);
+    return { ...legacy, schemaVersion: 2 } as LayoutSnapshot;
+  }
+  return layoutSnapshotV2Schema.parse(value) as LayoutSnapshot;
 }
 
 export function parseIndexedRoomLayouts(indexValue: unknown, files: Record<string, unknown>): RoomLayout[] {

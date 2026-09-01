@@ -1,11 +1,12 @@
 import { parseLayoutSnapshot } from "./layout-schema";
 import type { LayoutSnapshot, RoomLayout } from "./types";
 
-export const LAYOUT_STORAGE_KEY = "bedroom-layout-studio.layout.v1";
+export const LAYOUT_STORAGE_KEY = "bedroom-layout-studio.layout.v2";
+const LEGACY_LAYOUT_STORAGE_KEY = "bedroom-layout-studio.layout.v1";
 
 export function createLayoutSnapshot(rooms: RoomLayout[], savedAt = new Date()): LayoutSnapshot {
   return parseLayoutSnapshot({
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "browser-layout",
     name: "我的卧室布局",
     savedAt: savedAt.toISOString(),
@@ -32,7 +33,7 @@ export function saveLayoutToBrowser(rooms: RoomLayout[]): LayoutSnapshot {
 }
 
 export function loadLayoutFromBrowser(): LayoutSnapshot | null {
-  const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+  const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_LAYOUT_STORAGE_KEY);
   return raw ? deserializeLayoutSnapshot(raw) : null;
 }
 

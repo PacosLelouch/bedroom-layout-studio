@@ -16,10 +16,9 @@
   ],
   "bayWindow": { "side": "right", "start": 0, "length": 1500, "depth": 650, "sillHeight": 600 },
   "items": [
-    { "id": "small-sofa-bed", "assetId": "sofa-bed", "name": "1200 折叠沙发床", "position": { "x": 300, "z": 1000 }, "rotation": 0, "size": { "width": 600, "depth": 2000, "height": 720 }, "color": "#c9c2d5", "interactionState": "closed", "collapsedWidth": 600, "expandedWidth": 1200, "collapsedDepth": 2000, "expandedDepth": 2000, "collapsedPositionX": 300, "expandedPositionX": 600, "collapsedPositionZ": 1000, "expandedPositionZ": 1000 },
-    { "id": "small-wardrobe", "assetId": "sliding-wardrobe", "name": "推拉门衣柜", "position": { "x": 1700, "z": 325 }, "rotation": 0, "size": { "width": 1000, "depth": 650, "height": 2400 }, "color": "#c8b696", "interactionState": "closed" },
-    { "id": "small-desk", "assetId": "desk", "name": "飘窗书桌", "position": { "x": 2466, "z": 700 }, "rotation": 90, "size": { "width": 1000, "depth": 500, "height": 750 }, "color": "#a98d69" },
-    { "id": "small-cabinet", "assetId": "bay-cabinet", "name": "飘窗摆柜", "position": { "x": 2866, "z": 700 }, "rotation": 90, "size": { "width": 1000, "depth": 300, "height": 700 }, "color": "#cab698", "supportSurface": "bay-window", "baseHeight": 600 },
-    { "id": "small-chair", "assetId": "desk-chair", "name": "书桌椅", "position": { "x": 1800, "z": 1350 }, "rotation": 90, "size": { "width": 420, "depth": 420, "height": 800 }, "color": "#826f8f" }
+    { "id": "small-bed", "assetId": "single-bed", "name": "1200 单人床", "position": { "x": 600, "z": 950 }, "rotation": 0, "size": { "width": 1200, "depth": 1900, "height": 500 }, "color": "#b8c8bf" },
+    { "id": "small-wardrobe", "assetId": "sliding-wardrobe", "name": "推拉门衣柜", "position": { "x": 750, "z": 2188 }, "rotation": 180, "size": { "width": 1500, "depth": 650, "height": 2400 }, "color": "#c8b696", "interactionState": "closed" },
+    { "id": "small-desk", "assetId": "desk", "name": "飘窗可升降书桌", "position": { "x": 2466, "z": 700 }, "rotation": 90, "size": { "width": 1000, "depth": 500, "height": 750 }, "color": "#a98d69", "interactionState": "closed", "loweredHeight": 750, "raisedHeight": 1100 },
+    { "id": "small-chair", "assetId": "desk-chair", "name": "书桌椅", "position": { "x": 2000, "z": 700 }, "rotation": 90, "size": { "width": 420, "depth": 420, "height": 800 }, "color": "#826f8f" }
   ]
 }

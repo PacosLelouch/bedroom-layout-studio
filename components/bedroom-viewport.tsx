@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { createAssetGroup } from "@/lib/bedroom/asset-registry";
-import { clearanceRect } from "@/lib/bedroom/geometry";
+import { createFurnitureModel, loadFurnitureRuntime } from "@/lib/bedroom/assets/runtime-cache";
+import { clearanceRect, collides, footprint, isSimplePolygon } from "@/lib/bedroom/geometry";
 import { disposeObjectTree } from "@/lib/bedroom/three-disposal";
+import { RoomSceneController } from "@/lib/bedroom/scene/room-scene-controller";
+import { BEDROOM_PERFORMANCE_MARKS, markBedroomPerformance } from "@/lib/bedroom/performance";
 import type { FurnitureItem, InteractionMode, RoomLayout, ViewMode } from "@/lib/bedroom/types";
 
 interface Props {
   room: RoomLayout;
+  rooms?: RoomLayout[];
   selectedId: string | null;
   collisionIds: Set<string>;
   viewMode: ViewMode;
@@ -16,18 +19,24 @@ interface Props {
   snap: number;
   showGrid: boolean;
   showWalls: boolean;
+  collisionDetectionEnabled: boolean;
   onSelect: (id: string | null) => void;
   onChangeItem: (id: string, patch: Partial<FurnitureItem>, options?: { recordHistory?: boolean }) => void;
+  onChangeOutline: (outline: RoomLayout["outline"], options?: {
+    recordHistory?: boolean;
+    wallMove?: { axis: "x" | "z"; from: number; to: number };
+  }) => void;
   onToggleDoor: (id: string) => void;
   onInteractItem: (id: string) => void;
 }
 
-type ViewportState = { rebuild: () => void };
+type ViewportState = RoomSceneController<Props>;
 
 export function BedroomViewport(props: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const propsRef = useRef(props);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
+  const [assetLoadState, setAssetLoadState] = useState({ loaded: 0, total: 0, failed: 0 });
 
   useEffect(() => {
     propsRef.current = props;
@@ -58,7 +67,7 @@ export function BedroomViewport(props: Props) {
     const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const hitPoint = new THREE.Vector3();
     const target = new THREE.Vector3();
-    const world = new THREE.Group();
+    let world = new THREE.Group();
     scene.add(world);
     scene.add(new THREE.HemisphereLight("#fffdf4", "#9c9284", 2.1));
     const sun = new THREE.DirectionalLight("#fff4dc", 3.1);
@@ -75,16 +84,50 @@ export function BedroomViewport(props: Props) {
     let dragHistoryRecorded = false;
     let dragStartX = 0;
     let dragStartRotation = 0;
+    let draggingOutlineIndex: number | null = null;
+    let outlineHistoryRecorded = false;
     let orbiting = false;
     let lastX = 0;
     let lastY = 0;
     let azimuth = 0.72;
     let elevation = 0.76;
     let distance = 9000;
+    let buildRevision = 0;
+    let disposed = false;
+    let frameScheduled = false;
+    let renderedProps = propsRef.current;
+    let furnitureById = new Map<string, THREE.Group>();
+    let activeRoomId = renderedProps.room.id;
+    let activeRoomReference = renderedProps.room;
+    const roomCache = new Map<string, { world: THREE.Group; furnitureById: Map<string, THREE.Group>; roomReference: RoomLayout; lastUsedAt: number }>();
+    const cameraStates = new Map<string, { azimuth: number; elevation: number; distance: number; topZoom: number }>();
+    const prewarmedAssets = new Set<string>();
+    let idleHandle: number | null = null;
+    let changeFrame: number | null = null;
+    let pendingChange: { id: string; patch: Partial<FurnitureItem>; recordHistory: boolean } | null = null;
+    const flushItemChange = () => {
+      if (changeFrame !== null) cancelAnimationFrame(changeFrame);
+      changeFrame = null; const change = pendingChange; pendingChange = null;
+      if (change) propsRef.current.onChangeItem(change.id, change.patch, { recordHistory: change.recordHistory });
+    };
+    const queueItemChange = (id: string, patch: Partial<FurnitureItem>, recordHistory: boolean) => {
+      pendingChange = { id, patch, recordHistory: pendingChange?.recordHistory || recordHistory };
+      if (changeFrame === null) changeFrame = requestAnimationFrame(flushItemChange);
+    };
+
+    const invalidate = () => {
+      if (frameScheduled) return;
+      frameScheduled = true;
+      requestAnimationFrame(() => {
+        frameScheduled = false;
+        renderer.render(scene, camera);
+      });
+    };
 
     const clearWorld = () => {
       disposeObjectTree(world);
       world.clear();
+      furnitureById.clear();
     };
 
     const updateCamera = () => {
@@ -115,9 +158,26 @@ export function BedroomViewport(props: Props) {
     };
 
     const rebuild = () => {
-      clearWorld();
+      buildRevision += 1;
       const current = propsRef.current;
+      if (current.room.id !== activeRoomId) {
+        cameraStates.set(activeRoomId, { azimuth, elevation, distance, topZoom: orthographic.zoom });
+        roomCache.set(activeRoomId, { world, furnitureById, roomReference: activeRoomReference, lastUsedAt: performance.now() });
+        scene.remove(world);
+        const cached = roomCache.get(current.room.id);
+        if (cached && cached.roomReference === current.room) {
+          world = cached.world; furnitureById = cached.furnitureById; activeRoomId = current.room.id; activeRoomReference = current.room; cached.lastUsedAt = performance.now(); scene.add(world);
+          const state = cameraStates.get(activeRoomId); if (state) { ({ azimuth, elevation, distance } = state); orthographic.zoom = state.topZoom; }
+          setAssetLoadState({ loaded: current.room.items.length, total: current.room.items.length, failed: 0 }); updateCamera(); updateSelectionHelpers(); invalidate(); return;
+        }
+        world = new THREE.Group(); furnitureById = new Map(); activeRoomId = current.room.id; activeRoomReference = current.room; scene.add(world);
+      } else {
+        clearWorld();
+      }
       const { width, depth, height } = current.room.dimensions;
+      setAssetLoadState({ loaded: 0, total: current.room.items.length, failed: 0 });
+      const targetWorld = world;
+      const targetFurnitureMap = furnitureById;
       const floorMaterial = new THREE.MeshStandardMaterial({ color: "#f8f5ed", roughness: 0.86 });
       const floorShape = new THREE.Shape();
       current.room.outline.forEach((point, index) => index === 0 ? floorShape.moveTo(point.x, point.z) : floorShape.lineTo(point.x, point.z));
@@ -342,16 +402,15 @@ export function BedroomViewport(props: Props) {
         ));
       });
       for (const item of current.room.items) {
-        const group = createAssetGroup(item);
-        group.position.set(item.position.x, item.baseHeight ?? (item.wallMounted ? 1450 : 0), item.position.z);
-        group.rotation.y = THREE.MathUtils.degToRad(item.rotation);
-        world.add(group);
-        if (current.selectedId === item.id || current.collisionIds.has(item.id)) {
-          group.updateWorldMatrix(true, true);
-          const helper = new THREE.BoxHelper(group, current.collisionIds.has(item.id) ? "#dc6549" : "#d89439");
-          helper.userData.decorative = true;
-          world.add(helper);
-        }
+        const placeholder = new THREE.Group();
+        const placeholderMesh = new THREE.Mesh(new THREE.BoxGeometry(item.size.width, item.size.height, item.size.depth), new THREE.MeshBasicMaterial({ color: "#c8b69a", transparent: true, opacity: .22, wireframe: true }));
+        placeholderMesh.position.y = item.size.height / 2; placeholder.add(placeholderMesh); placeholder.userData.furnitureId = item.id;
+        placeholder.position.set(item.position.x, item.baseHeight ?? (item.wallMounted ? 1450 : 0), item.position.z); placeholder.rotation.y = THREE.MathUtils.degToRad(item.rotation);
+        furnitureById.set(item.id, placeholder); world.add(placeholder);
+        void createFurnitureModel(item).then((group) => {
+          if (disposed || targetFurnitureMap.get(item.id) !== placeholder) { disposeObjectTree(group); return; }
+          group.position.copy(placeholder.position); group.rotation.copy(placeholder.rotation); targetWorld.remove(placeholder); disposeObjectTree(placeholder); targetWorld.add(group); targetFurnitureMap.set(item.id, group); if (targetWorld === world) { setAssetLoadState((state) => ({ ...state, loaded: Math.min(state.total, state.loaded + 1) })); updateSelectionHelpers(); } invalidate();
+        }).catch(() => { placeholderMesh.material.color.set("#d85e4b"); placeholder.userData.loadFailed = true; if (targetWorld === world) setAssetLoadState((state) => ({ ...state, loaded: Math.min(state.total, state.loaded + 1), failed: state.failed + 1 })); invalidate(); });
         const clearance = clearanceRect(item);
         if (clearance) {
           const marker = new THREE.Mesh(
@@ -363,37 +422,134 @@ export function BedroomViewport(props: Props) {
           world.add(marker);
         }
       }
+      if (current.interactionMode === "outline") {
+        const outlinePoints = current.room.outline.map((point) => new THREE.Vector3(point.x, 32, point.z));
+        const outlineLine = new THREE.LineLoop(
+          new THREE.BufferGeometry().setFromPoints(outlinePoints),
+          new THREE.LineBasicMaterial({ color: "#d37d26", linewidth: 2 }),
+        );
+        outlineLine.userData.decorative = true;
+        world.add(outlineLine);
+        current.room.outline.forEach((point, index) => {
+          const next = current.room.outline[(index + 1) % current.room.outline.length];
+          const handle = new THREE.Mesh(
+            new THREE.CylinderGeometry(76, 76, 46, 20),
+            new THREE.MeshStandardMaterial({ color: "#ef8a2f", emissive: "#5b2600", emissiveIntensity: 0.2 }),
+          );
+          handle.position.set((point.x + next.x) / 2, 28, (point.z + next.z) / 2);
+          handle.userData.outlineIndex = index;
+          world.add(handle);
+        });
+      }
       updateCamera();
+      updateSelectionHelpers();
+      invalidate();
+      roomCache.set(activeRoomId, { world, furnitureById, roomReference: current.room, lastUsedAt: performance.now() });
+      activeRoomReference = current.room;
+      while (roomCache.size > 3) {
+        const oldest = [...roomCache.entries()].filter(([id]) => id !== activeRoomId).sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt)[0];
+        if (!oldest) break; roomCache.delete(oldest[0]); disposeObjectTree(oldest[1].world);
+      }
+      if (idleHandle === null && current.rooms?.length) {
+        const prewarm = () => {
+          idleHandle = null;
+          const assetIds = [...new Set(current.rooms!.filter((room) => room.id !== activeRoomId).flatMap((room) => room.items.map((item) => item.assetId)))].filter((id) => !prewarmedAssets.has(id));
+          assetIds.forEach((id) => { prewarmedAssets.add(id); void loadFurnitureRuntime(id).catch(() => prewarmedAssets.delete(id)); });
+        };
+        idleHandle = "requestIdleCallback" in window ? window.requestIdleCallback(prewarm, { timeout: 1200 }) : window.setTimeout(prewarm, 250);
+      }
     };
 
-    const resize = () => {
-      const width = host.clientWidth;
-      const height = host.clientHeight;
+    const updateSelectionHelpers = () => {
+      const helpers = world.children.filter((object) => object.userData.selectionHelper === true);
+      helpers.forEach((object) => { world.remove(object); disposeObjectTree(object); });
+      const current = propsRef.current;
+      furnitureById.forEach((group, id) => {
+        if (current.selectedId !== id && !current.collisionIds.has(id)) return;
+        group.updateWorldMatrix(true, true);
+        const helper = new THREE.BoxHelper(group, current.collisionIds.has(id) ? "#dc6549" : "#d89439");
+        helper.userData.decorative = true; helper.userData.selectionHelper = true; world.add(helper);
+      });
+      invalidate();
+    };
+
+    const structureKey = (value: Props) => JSON.stringify({ id: value.room.id, dimensions: value.room.dimensions, outline: value.room.outline, bayWindow: value.room.bayWindow, doors: value.room.doors, keepOutZones: value.room.keepOutZones, showGrid: value.showGrid, showWalls: value.showWalls, outlineMode: value.interactionMode === "outline" });
+    const runtimeKey = (item: FurnitureItem) => JSON.stringify({ assetId: item.assetId, size: item.size, color: item.color, parameterValues: item.parameterValues, stateId: item.stateId });
+    const applyProps = (next: Props) => {
+      const previous = renderedProps; renderedProps = next;
+      if (previous.room.id !== next.room.id) markBedroomPerformance(BEDROOM_PERFORMANCE_MARKS.roomSwitchStart, { roomId: next.room.id });
+      if (previous.viewMode !== next.viewMode) markBedroomPerformance(BEDROOM_PERFORMANCE_MARKS.viewSwitchStart, { viewMode: next.viewMode });
+      const markVisible = () => requestAnimationFrame(() => {
+        if (previous.room.id !== next.room.id) markBedroomPerformance(BEDROOM_PERFORMANCE_MARKS.roomSwitchVisible, { roomId: next.room.id });
+        if (previous.viewMode !== next.viewMode) markBedroomPerformance(BEDROOM_PERFORMANCE_MARKS.viewSwitchVisible, { viewMode: next.viewMode });
+      });
+      if (structureKey(previous) !== structureKey(next) || previous.room.items.length !== next.room.items.length || next.room.items.some((item) => !previous.room.items.some((old) => old.id === item.id) || runtimeKey(item) !== runtimeKey(previous.room.items.find((old) => old.id === item.id)!))) { rebuild(); markVisible(); return; }
+      for (const item of next.room.items) { const group = furnitureById.get(item.id); if (group) { group.position.set(item.position.x, item.baseHeight ?? (item.wallMounted ? 1450 : 0), item.position.z); group.rotation.y = THREE.MathUtils.degToRad(item.rotation); } }
+      activeRoomReference = next.room;
+      if (previous.viewMode !== next.viewMode || previous.room.id !== next.room.id) updateCamera();
+      updateSelectionHelpers(); invalidate();
+      markVisible();
+    };
+
+    let resizeFrame: number | null = null;
+    let pendingWidth = 0;
+    let pendingHeight = 0;
+    let renderedWidth = -1;
+    let renderedHeight = -1;
+    const applyResize = () => {
+      resizeFrame = null;
+      const width = Math.max(1, Math.round(pendingWidth || host.clientWidth));
+      const height = Math.max(1, Math.round(pendingHeight || host.clientHeight));
+      if (width === renderedWidth && height === renderedHeight) return;
+      renderedWidth = width;
+      renderedHeight = height;
       renderer.setSize(width, height, false);
-      perspective.aspect = width / Math.max(1, height);
+      perspective.aspect = width / height;
       updateCamera();
+      invalidate();
+    };
+    const scheduleResize = (width = host.clientWidth, height = host.clientHeight) => {
+      pendingWidth = width;
+      pendingHeight = height;
+      if (resizeFrame === null) resizeFrame = requestAnimationFrame(applyResize);
     };
     const setPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
-    const pick = (event: PointerEvent): { kind: "furniture" | "door"; id: string } | null => {
+    const pick = (event: PointerEvent): { kind: "furniture" | "door"; id: string } | { kind: "outline"; index: number } | null => {
       setPointer(event);
       raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects(world.children, true);
       for (const hit of hits) {
         let object: THREE.Object3D | null = hit.object;
-        while (object && !object.userData.furnitureId && !object.userData.doorId) object = object.parent;
+        while (object && !object.userData.furnitureId && !object.userData.doorId && object.userData.outlineIndex === undefined) object = object.parent;
+        if (object?.userData.outlineIndex !== undefined) return { kind: "outline", index: object.userData.outlineIndex as number };
         if (object?.userData.furnitureId) return { kind: "furniture", id: object.userData.furnitureId as string };
         if (object?.userData.doorId) return { kind: "door", id: object.userData.doorId as string };
       }
       return null;
     };
+    const canApplyItemPatch = (itemId: string, patch: Partial<FurnitureItem>) => {
+      const current = propsRef.current;
+      if (!current.collisionDetectionEnabled) return true;
+      const candidateRoom: RoomLayout = {
+        ...current.room,
+        items: current.room.items.map((item) => item.id === itemId ? { ...item, ...patch } : item),
+      };
+      const candidate = candidateRoom.items.find((item) => item.id === itemId);
+      return Boolean(candidate && !collides(candidate, candidateRoom));
+    };
     const onPointerDown = (event: PointerEvent) => {
       renderer.domElement.setPointerCapture(event.pointerId);
       const targetObject = pick(event);
-      if (targetObject?.kind === "door") {
+      if (targetObject?.kind === "outline" && propsRef.current.interactionMode === "outline") {
+        propsRef.current.onSelect(null);
+        draggingOutlineIndex = targetObject.index;
+        outlineHistoryRecorded = false;
+        renderer.domElement.style.cursor = "grabbing";
+      } else if (targetObject?.kind === "door") {
         propsRef.current.onSelect(null);
         if (propsRef.current.interactionMode === "interact") propsRef.current.onToggleDoor(targetObject.id);
         renderer.domElement.style.cursor = propsRef.current.interactionMode === "interact" ? "pointer" : "default";
@@ -416,35 +572,68 @@ export function BedroomViewport(props: Props) {
       }
     };
     const onPointerMove = (event: PointerEvent) => {
-      if (draggingId && dragAction === "move") {
+      if (draggingOutlineIndex !== null) {
+        setPointer(event);
+        raycaster.setFromCamera(pointer, camera);
+        if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
+          const current = propsRef.current;
+          const point = current.room.outline[draggingOutlineIndex];
+          const nextIndex = (draggingOutlineIndex + 1) % current.room.outline.length;
+          const next = current.room.outline[nextIndex];
+          const horizontal = Math.abs(next.x - point.x) >= Math.abs(next.z - point.z);
+          const coordinate = Math.max(0, Math.min(20000, Math.round((horizontal ? hitPoint.z : hitPoint.x) / current.snap) * current.snap));
+          const outline = current.room.outline.map((entry, index) => {
+            if (index !== draggingOutlineIndex && index !== nextIndex) return entry;
+            return horizontal ? { ...entry, z: coordinate } : { ...entry, x: coordinate };
+          });
+          const area = Math.abs(outline.reduce((sum, point, index) => {
+            const next = outline[(index + 1) % outline.length];
+            return sum + point.x * next.z - next.x * point.z;
+          }, 0)) / 2;
+          if (area >= 1_000_000 && isSimplePolygon(outline)) {
+            current.onChangeOutline(outline, {
+              recordHistory: !outlineHistoryRecorded,
+              wallMove: { axis: horizontal ? "z" : "x", from: horizontal ? point.z : point.x, to: coordinate },
+            });
+            outlineHistoryRecorded = true;
+          }
+        }
+      } else if (draggingId && dragAction === "move") {
         setPointer(event);
         raycaster.setFromCamera(pointer, camera);
         if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
           const current = propsRef.current;
           const item = current.room.items.find((entry) => entry.id === draggingId);
           if (!item) return;
-          const rotated = Math.abs(item.rotation % 180) === 90;
-          const width = rotated ? item.size.depth : item.size.width;
-          const depth = rotated ? item.size.width : item.size.depth;
+          const { width, depth } = footprint(item);
           const x = Math.max(width / 2, Math.min(current.room.dimensions.width - width / 2, Math.round(hitPoint.x / current.snap) * current.snap));
           const z = Math.max(depth / 2, Math.min(current.room.dimensions.depth - depth / 2, Math.round(hitPoint.z / current.snap) * current.snap));
-          current.onChangeItem(draggingId, { position: { x, z } }, { recordHistory: !dragHistoryRecorded });
-          dragHistoryRecorded = true;
+          const patch = { position: { x, z } };
+          if (canApplyItemPatch(draggingId, patch)) {
+            queueItemChange(draggingId, patch, !dragHistoryRecorded);
+            dragHistoryRecorded = true;
+          }
         }
       } else if (draggingId && dragAction === "rotate") {
         const rotation = Math.round((dragStartRotation + (event.clientX - dragStartX) * 0.6) / 5) * 5;
-        propsRef.current.onChangeItem(draggingId, { rotation: ((rotation % 360) + 360) % 360 }, { recordHistory: !dragHistoryRecorded });
-        dragHistoryRecorded = true;
+        const patch = { rotation: ((rotation % 360) + 360) % 360 };
+        if (canApplyItemPatch(draggingId, patch)) {
+          queueItemChange(draggingId, patch, !dragHistoryRecorded);
+          dragHistoryRecorded = true;
+        }
       } else if (orbiting) {
         azimuth -= (event.clientX - lastX) * 0.008;
         elevation = Math.max(0.28, Math.min(1.35, elevation + (event.clientY - lastY) * 0.006));
         lastX = event.clientX;
         lastY = event.clientY;
         updateCamera();
+        invalidate();
       } else {
         const targetObject = pick(event);
         const mode = propsRef.current.interactionMode;
-        renderer.domElement.style.cursor = targetObject?.kind === "door"
+        renderer.domElement.style.cursor = targetObject?.kind === "outline"
+          ? mode === "outline" ? "grab" : "default"
+          : targetObject?.kind === "door"
           ? mode === "interact" ? "pointer" : "default"
           : targetObject?.kind === "furniture"
             ? mode === "interact" ? "pointer" : mode === "move" ? "grab" : "ew-resize"
@@ -452,7 +641,9 @@ export function BedroomViewport(props: Props) {
       }
     };
     const onPointerUp = (event: PointerEvent) => {
+      flushItemChange();
       draggingId = null;
+      draggingOutlineIndex = null;
       dragAction = null;
       orbiting = false;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
@@ -469,22 +660,31 @@ export function BedroomViewport(props: Props) {
       updateCamera();
     };
 
-    const observer = new ResizeObserver(resize);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.at(-1);
+      scheduleResize(entry?.contentRect.width, entry?.contentRect.height);
+    });
     observer.observe(host);
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointercancel", onPointerUp);
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-    let frame = 0;
-    const animate = () => { frame = requestAnimationFrame(animate); renderer.render(scene, camera); };
     rebuild();
-    resize();
-    animate();
-    (host as HTMLDivElement & { __bedroomState?: ViewportState }).__bedroomState = { rebuild };
+    scheduleResize();
+    markBedroomPerformance(BEDROOM_PERFORMANCE_MARKS.firstRoomReady, { roomId: propsRef.current.room.id });
+    const controller = new RoomSceneController<Props>({ applyProps, invalidate, dispose: () => undefined });
+    controller.applyProps(propsRef.current);
+    (host as HTMLDivElement & { __bedroomState?: ViewportState }).__bedroomState = controller;
 
     return () => {
-      cancelAnimationFrame(frame);
+      buildRevision += 1;
+      disposed = true;
+      if (changeFrame !== null) cancelAnimationFrame(changeFrame);
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      changeFrame = null; pendingChange = null;
+      controller.dispose();
+      if (idleHandle !== null) { if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleHandle); else window.clearTimeout(idleHandle); }
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
@@ -492,6 +692,8 @@ export function BedroomViewport(props: Props) {
       renderer.domElement.removeEventListener("pointercancel", onPointerUp);
       renderer.domElement.removeEventListener("wheel", onWheel);
       clearWorld();
+      roomCache.forEach((entry) => { if (entry.world !== world) disposeObjectTree(entry.world); });
+      roomCache.clear();
       renderer.dispose();
       renderer.domElement.remove();
     };
@@ -499,13 +701,13 @@ export function BedroomViewport(props: Props) {
 
   useEffect(() => {
     const host = hostRef.current as (HTMLDivElement & { __bedroomState?: ViewportState }) | null;
-    host?.__bedroomState?.rebuild();
-  }, [props.room, props.selectedId, props.collisionIds, props.viewMode, props.interactionMode, props.showGrid, props.showWalls]);
+    host?.__bedroomState?.applyProps(props);
+  }, [props.room, props.selectedId, props.collisionIds, props.viewMode, props.interactionMode, props.showGrid, props.showWalls, props.collisionDetectionEnabled]);
 
   if (webglUnavailable) {
     return <BedroomFallback2D {...props} />;
   }
-  return <div ref={hostRef} className="three-viewport" aria-label={`${props.room.name}三维布局编辑画布`} />;
+  return <><div ref={hostRef} className="three-viewport" aria-label={`${props.room.name}三维布局编辑画布`} />{assetLoadState.loaded < assetLoadState.total && <div className="viewport-asset-progress" role="status">正在加载 {assetLoadState.loaded}/{assetLoadState.total} 件家具</div>}{assetLoadState.failed > 0 && <div className="viewport-asset-progress error" role="alert">{assetLoadState.failed} 件家具加载失败，已保留红色占位体</div>}</>;
 }
 
 function BedroomFallback2D({ room, selectedId, collisionIds, interactionMode, onSelect, onToggleDoor, onInteractItem }: Props) {
