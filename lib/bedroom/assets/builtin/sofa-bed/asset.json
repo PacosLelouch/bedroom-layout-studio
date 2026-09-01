@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 3,
+  "id": "sofa-bed",
+  "name": "折叠沙发床",
+  "category": "bed",
+  "origin": {
+    "method": "manual-procedural"
+  },
+  "lifecyclePolicy": "repository-trusted",
+  "status": "approved",
+  "dimensions": {
+    "width": 600,
+    "depth": 2000,
+    "height": 720
+  },
+  "appearance": {
+    "defaultColor": "#c9c2d5"
+  },
+  "defaultConfiguration": {
+    "dimensions": {
+      "width": 600,
+      "depth": 2000,
+      "height": 720
+    },
+    "parameters": {
+      "expandedWidth": 1200,
+      "expandedDepth": 2000
+    },
+    "stateId": "closed"
+  },
+  "parameterDefinitions": [
+    {
+      "id": "expandedWidth",
+      "label": "展开宽度",
+      "type": "number",
+      "defaultValue": 1200,
+      "min": 600,
+      "step": 50,
+      "unit": "mm"
+    },
+    {
+      "id": "expandedDepth",
+      "label": "展开深度",
+      "type": "number",
+      "defaultValue": 2000,
+      "min": 600,
+      "step": 50,
+      "unit": "mm"
+    }
+  ],
+  "states": [
+    {
+      "id": "closed",
+      "label": "沙发"
+    },
+    {
+      "id": "open",
+      "label": "床"
+    }
+  ],
+  "components": [
+    {
+      "id": "body",
+      "label": "主体",
+      "nodeNames": [
+        "body"
+      ],
+      "movable": false
+    }
+  ],
+  "capabilityBindings": [
+    {
+      "capabilityId": "state:closed",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "behavior"
+    },
+    {
+      "capabilityId": "state:open",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "behavior"
+    },
+    {
+      "capabilityId": "parameter:expandedWidth",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions",
+      "activeStateIds": [
+        "open"
+      ]
+    },
+    {
+      "capabilityId": "parameter:expandedDepth",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions",
+      "activeStateIds": [
+        "open"
+      ]
+    }
+  ],
+  "validationConfigurations": [
+    {
+      "id": "default",
+      "dimensions": {
+        "width": 600,
+        "depth": 2000,
+        "height": 720
+      },
+      "parameters": {
+        "expandedWidth": 1200,
+        "expandedDepth": 2000
+      },
+      "stateId": "closed"
+    },
+    {
+      "id": "state-open",
+      "dimensions": {
+        "width": 600,
+        "depth": 2000,
+        "height": 720
+      },
+      "parameters": {
+        "expandedWidth": 1200,
+        "expandedDepth": 2000
+      },
+      "stateId": "open",
+      "compareAgainst": "default",
+      "testsCapability": "state:open"
+    },
+    {
+      "id": "parameter-expandedWidth-1",
+      "dimensions": {
+        "width": 600,
+        "depth": 2000,
+        "height": 720
+      },
+      "parameters": {
+        "expandedWidth": 600,
+        "expandedDepth": 2000
+      },
+      "stateId": "open",
+      "compareAgainst": "state-open",
+      "testsCapability": "parameter:expandedWidth"
+    },
+    {
+      "id": "parameter-expandedDepth-1",
+      "dimensions": {
+        "width": 600,
+        "depth": 2000,
+        "height": 720
+      },
+      "parameters": {
+        "expandedWidth": 1200,
+        "expandedDepth": 600
+      },
+      "stateId": "open",
+      "compareAgainst": "state-open",
+      "testsCapability": "parameter:expandedDepth"
+    }
+  ],
+  "designOverrides": [],
+  "candidateEvidence": null,
+  "footprintPolicy": {
+    "type": "state-overrides",
+    "states": {
+      "closed": {
+        "width": 600,
+        "depth": 2000
+      },
+      "open": {
+        "width": 1200,
+        "depth": 2000
+      }
+    }
+  },
+  "clearancePolicy": {
+    "type": "none"
+  },
+  "exportCapabilities": {
+    "formats": [
+      "glb"
+    ],
+    "materialPolicy": "portable-pbr",
+    "preserveComponentNodes": true
+  },
+  "exportReady": true,
+  "dimensionSource": {
+    "type": "other-context",
+    "note": "项目内置家具默认尺寸"
+  },
+  "qualityEvidence": [
+    {
+      "kind": "source",
+      "label": "项目内置程序化 Three.js 工厂",
+      "path": "lib/bedroom/assets/builtin/sofa-bed/runtime.ts"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "referenceImage": null,
+  "approvedFactoryHash": null,
+  "reviewedAt": "2026-09-01T00:00:00.000Z",
+  "exportEvidence": null,
+  "assetScope": "builtin"
+}

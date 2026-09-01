@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 3,
+  "id": "entry-cabinet",
+  "name": "可开合收纳薄柜",
+  "category": "storage",
+  "origin": {
+    "method": "manual-procedural"
+  },
+  "lifecyclePolicy": "repository-trusted",
+  "status": "approved",
+  "dimensions": {
+    "width": 800,
+    "depth": 350,
+    "height": 2200
+  },
+  "appearance": {
+    "defaultColor": "#bda989"
+  },
+  "defaultConfiguration": {
+    "dimensions": {
+      "width": 800,
+      "depth": 350,
+      "height": 2200
+    },
+    "parameters": {},
+    "stateId": "closed"
+  },
+  "parameterDefinitions": [],
+  "states": [
+    {
+      "id": "closed",
+      "label": "关闭"
+    },
+    {
+      "id": "open",
+      "label": "打开"
+    }
+  ],
+  "components": [
+    {
+      "id": "body",
+      "label": "柜体",
+      "nodeNames": [
+        "body"
+      ],
+      "movable": false
+    },
+    {
+      "id": "leftDoor",
+      "label": "左柜门",
+      "nodeNames": [
+        "left-door-pivot"
+      ],
+      "movable": true,
+      "pivotNode": "left-door-pivot"
+    },
+    {
+      "id": "rightDoor",
+      "label": "右柜门",
+      "nodeNames": [
+        "right-door-pivot"
+      ],
+      "movable": true,
+      "pivotNode": "right-door-pivot"
+    }
+  ],
+  "capabilityBindings": [
+    {
+      "capabilityId": "state:closed",
+      "componentIds": [
+        "leftDoor",
+        "rightDoor"
+      ],
+      "effect": "transform"
+    },
+    {
+      "capabilityId": "state:open",
+      "componentIds": [
+        "leftDoor",
+        "rightDoor"
+      ],
+      "effect": "transform"
+    }
+  ],
+  "validationConfigurations": [
+    {
+      "id": "default",
+      "dimensions": {
+        "width": 800,
+        "depth": 350,
+        "height": 2200
+      },
+      "parameters": {},
+      "stateId": "closed"
+    },
+    {
+      "id": "state-open",
+      "dimensions": {
+        "width": 800,
+        "depth": 350,
+        "height": 2200
+      },
+      "parameters": {},
+      "stateId": "open",
+      "compareAgainst": "default",
+      "testsCapability": "state:open"
+    }
+  ],
+  "designOverrides": [],
+  "candidateEvidence": null,
+  "footprintPolicy": {
+    "type": "configuration-dimensions"
+  },
+  "clearancePolicy": {
+    "type": "front",
+    "depth": "half-width",
+    "label": "双开门开启区"
+  },
+  "exportCapabilities": {
+    "formats": [
+      "glb"
+    ],
+    "materialPolicy": "portable-pbr",
+    "preserveComponentNodes": true
+  },
+  "exportReady": true,
+  "dimensionSource": {
+    "type": "other-context",
+    "note": "项目内置家具默认尺寸"
+  },
+  "qualityEvidence": [
+    {
+      "kind": "source",
+      "label": "项目内置程序化 Three.js 工厂",
+      "path": "lib/bedroom/assets/builtin/entry-cabinet/runtime.ts"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "referenceImage": null,
+  "approvedFactoryHash": null,
+  "reviewedAt": "2026-09-01T00:00:00.000Z",
+  "exportEvidence": null,
+  "assetScope": "builtin"
+}

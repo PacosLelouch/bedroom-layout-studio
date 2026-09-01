@@ -1,0 +1,4 @@
+interface:
+  display_name: "家具候选资产管线"
+  short_description: "创建、修改并验证可交互、参数化、GLB 就绪的候选家具"
+  default_prompt: "使用 $furniture-asset-packaging 创建或修改统一家具包；按交付范围选择 builtin 或 user-generated，并在全部技术门禁通过后登记为候选资产。"

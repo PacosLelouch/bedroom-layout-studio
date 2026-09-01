@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 3,
+  "assetScope": "user-generated",
+  "id": "crown-chest",
+  "name": "皇冠收纳箱",
+  "category": "storage",
+  "status": "draft",
+  "origin": {
+    "method": "img2threejs",
+    "sourceUrl": "https://github.com/img2threejs/img2threejs-showcase/blob/main/src/demos/crown-chest/createCrownChestModel.ts",
+    "sourceRevision": "34504676cf7257956adaed535b23ff2b242649ba"
+  },
+  "lifecyclePolicy": "user-reviewed",
+  "appearance": {
+    "defaultColor": "#265e9d"
+  },
+  "referenceImage": "/generated-assets/crown-chest/reference.png",
+  "dimensions": null,
+  "defaultConfiguration": null,
+  "parameterDefinitions": [],
+  "states": [
+    { "id": "closed", "label": "关闭" },
+    { "id": "open", "label": "打开" }
+  ],
+  "components": [
+    { "id": "body", "label": "箱体", "nodeNames": ["body"], "movable": false },
+    { "id": "lid", "label": "箱盖", "nodeNames": ["lid-hinge", "lid"], "movable": true, "pivotNode": "lid-hinge" },
+    { "id": "frontLatch", "label": "前锁扣", "nodeNames": ["front-latch"], "movable": false },
+    { "id": "sideHandle", "label": "侧把手", "nodeNames": ["side-handle"], "movable": false },
+    { "id": "crownEmblem", "label": "皇冠徽章", "nodeNames": ["crown-emblem", "crown-panel", "crown-glyph"], "movable": false }
+  ],
+  "capabilityBindings": [
+    { "capabilityId": "state:open", "componentIds": ["lid"], "effect": "transform" }
+  ],
+  "validationConfigurations": [],
+  "designOverrides": [],
+  "footprintPolicy": {
+    "type": "configuration-dimensions"
+  },
+  "clearancePolicy": {
+    "type": "none"
+  },
+  "exportCapabilities": {
+    "formats": ["glb"],
+    "materialPolicy": "portable-pbr",
+    "preserveComponentNodes": true
+  },
+  "candidateEvidence": null,
+  "reconstruction": {
+    "profile": "img2threejs-generic",
+    "referenceFiles": ["/generated-assets/crown-chest/reference.png"]
+  },
+  "exportReady": false,
+  "exportIssue": "已提供可移植顶点色导出材质；等待补充可靠毫米尺寸并完成正式 GLB 重载证据。",
+  "exportEvidence": null,
+  "dimensionSource": null,
+  "qualityEvidence": [
+    {
+      "kind": "reference",
+      "label": "单张 3/4 参考图",
+      "path": "/generated-assets/crown-chest/reference.png"
+    },
+    {
+      "kind": "source",
+      "label": "img2threejs Showcase 已验证工厂",
+      "path": "https://github.com/img2threejs/img2threejs-showcase/tree/main/src/demos/crown-chest"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "approvedFactoryHash": null,
+  "reviewedAt": null
+}

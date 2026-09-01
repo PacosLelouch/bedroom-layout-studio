@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 3,
+  "id": "desk-chair",
+  "name": "书桌椅",
+  "category": "seat",
+  "origin": {
+    "method": "manual-procedural"
+  },
+  "lifecyclePolicy": "repository-trusted",
+  "status": "approved",
+  "dimensions": {
+    "width": 460,
+    "depth": 460,
+    "height": 820
+  },
+  "appearance": {
+    "defaultColor": "#6f877d"
+  },
+  "defaultConfiguration": {
+    "dimensions": {
+      "width": 460,
+      "depth": 460,
+      "height": 820
+    },
+    "parameters": {},
+    "stateId": null
+  },
+  "parameterDefinitions": [],
+  "states": [],
+  "components": [
+    {
+      "id": "body",
+      "label": "主体",
+      "nodeNames": [
+        "body"
+      ],
+      "movable": false
+    }
+  ],
+  "capabilityBindings": [],
+  "validationConfigurations": [
+    {
+      "id": "default",
+      "dimensions": {
+        "width": 460,
+        "depth": 460,
+        "height": 820
+      },
+      "parameters": {},
+      "stateId": null
+    }
+  ],
+  "designOverrides": [],
+  "candidateEvidence": null,
+  "footprintPolicy": {
+    "type": "configuration-dimensions"
+  },
+  "clearancePolicy": {
+    "type": "none"
+  },
+  "exportCapabilities": {
+    "formats": [
+      "glb"
+    ],
+    "materialPolicy": "portable-pbr",
+    "preserveComponentNodes": true
+  },
+  "exportReady": true,
+  "dimensionSource": {
+    "type": "other-context",
+    "note": "项目内置家具默认尺寸"
+  },
+  "qualityEvidence": [
+    {
+      "kind": "source",
+      "label": "项目内置程序化 Three.js 工厂",
+      "path": "lib/bedroom/assets/builtin/desk-chair/runtime.ts"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "referenceImage": null,
+  "approvedFactoryHash": null,
+  "reviewedAt": "2026-09-01T00:00:00.000Z",
+  "exportEvidence": null,
+  "assetScope": "builtin"
+}

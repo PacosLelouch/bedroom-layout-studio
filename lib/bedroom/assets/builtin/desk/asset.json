@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 3,
+  "id": "desk",
+  "name": "可升降书桌",
+  "category": "desk",
+  "origin": {
+    "method": "manual-procedural"
+  },
+  "lifecyclePolicy": "repository-trusted",
+  "status": "approved",
+  "dimensions": {
+    "width": 1200,
+    "depth": 600,
+    "height": 750
+  },
+  "appearance": {
+    "defaultColor": "#a98d69"
+  },
+  "defaultConfiguration": {
+    "dimensions": {
+      "width": 1200,
+      "depth": 600,
+      "height": 750
+    },
+    "parameters": {
+      "loweredHeight": 750,
+      "raisedHeight": 1100
+    },
+    "stateId": "closed"
+  },
+  "parameterDefinitions": [
+    {
+      "id": "loweredHeight",
+      "label": "标准高度",
+      "type": "number",
+      "defaultValue": 750,
+      "min": 600,
+      "max": 900,
+      "step": 10,
+      "unit": "mm"
+    },
+    {
+      "id": "raisedHeight",
+      "label": "升高高度",
+      "type": "number",
+      "defaultValue": 1100,
+      "min": 800,
+      "max": 1300,
+      "step": 10,
+      "unit": "mm"
+    }
+  ],
+  "states": [
+    {
+      "id": "closed",
+      "label": "标准高度"
+    },
+    {
+      "id": "open",
+      "label": "升高"
+    }
+  ],
+  "components": [
+    {
+      "id": "body",
+      "label": "主体",
+      "nodeNames": [
+        "body"
+      ],
+      "movable": false
+    }
+  ],
+  "capabilityBindings": [
+    {
+      "capabilityId": "state:closed",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions"
+    },
+    {
+      "capabilityId": "state:open",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions"
+    },
+    {
+      "capabilityId": "parameter:loweredHeight",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions",
+      "activeStateIds": [
+        "closed"
+      ]
+    },
+    {
+      "capabilityId": "parameter:raisedHeight",
+      "componentIds": [
+        "body"
+      ],
+      "effect": "dimensions",
+      "activeStateIds": [
+        "open"
+      ]
+    }
+  ],
+  "validationConfigurations": [
+    {
+      "id": "default",
+      "dimensions": {
+        "width": 1200,
+        "depth": 600,
+        "height": 750
+      },
+      "parameters": {
+        "loweredHeight": 750,
+        "raisedHeight": 1100
+      },
+      "stateId": "closed"
+    },
+    {
+      "id": "state-open",
+      "dimensions": {
+        "width": 1200,
+        "depth": 600,
+        "height": 750
+      },
+      "parameters": {
+        "loweredHeight": 750,
+        "raisedHeight": 1100
+      },
+      "stateId": "open",
+      "compareAgainst": "default",
+      "testsCapability": "state:open"
+    },
+    {
+      "id": "parameter-loweredHeight-1",
+      "dimensions": {
+        "width": 1200,
+        "depth": 600,
+        "height": 750
+      },
+      "parameters": {
+        "loweredHeight": 900,
+        "raisedHeight": 1100
+      },
+      "stateId": "closed",
+      "compareAgainst": "default",
+      "testsCapability": "parameter:loweredHeight"
+    },
+    {
+      "id": "parameter-raisedHeight-1",
+      "dimensions": {
+        "width": 1200,
+        "depth": 600,
+        "height": 750
+      },
+      "parameters": {
+        "loweredHeight": 750,
+        "raisedHeight": 1300
+      },
+      "stateId": "open",
+      "compareAgainst": "state-open",
+      "testsCapability": "parameter:raisedHeight"
+    }
+  ],
+  "designOverrides": [],
+  "candidateEvidence": null,
+  "footprintPolicy": {
+    "type": "configuration-dimensions"
+  },
+  "clearancePolicy": {
+    "type": "none"
+  },
+  "exportCapabilities": {
+    "formats": [
+      "glb"
+    ],
+    "materialPolicy": "portable-pbr",
+    "preserveComponentNodes": true
+  },
+  "exportReady": true,
+  "dimensionSource": {
+    "type": "other-context",
+    "note": "项目内置家具默认尺寸"
+  },
+  "qualityEvidence": [
+    {
+      "kind": "source",
+      "label": "项目内置程序化 Three.js 工厂",
+      "path": "lib/bedroom/assets/builtin/desk/runtime.ts"
+    }
+  ],
+  "reviewViews": [
+    "reference",
+    "front",
+    "right",
+    "rear",
+    "left",
+    "top",
+    "perspective"
+  ],
+  "referenceImage": null,
+  "approvedFactoryHash": null,
+  "reviewedAt": "2026-09-01T00:00:00.000Z",
+  "exportEvidence": null,
+  "assetScope": "builtin"
+}
