@@ -41,5 +41,5 @@ next-env.d.ts
 /outputs/
 /work/
 
-# Local repository skill junction (created by scripts/link-img2threejs-skill.ps1)
-/.agents/skills/img2threejs
+# NOTE: .agents/skills/img2threejs is now tracked as a git submodule
+# (see `git submodule add`). It is no longer an ignored local junction.
