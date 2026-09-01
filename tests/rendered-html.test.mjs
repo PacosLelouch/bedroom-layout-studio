@@ -36,11 +36,18 @@ test("renders development preview metadata", async () => {
   assert.match(await response.text(), developmentPreviewMeta);
 });
 
-test("renders the static asset review route without a write API", async () => {
-  const response = await render("/asset-review?asset=crown-chest");
+test("renders the unified furniture review route without a write API", async () => {
+  const response = await render("/furniture-review?asset=wardrobe");
   const html = await response.text();
 
   assert.equal(response.status, 200);
-  assert.match(html, /img2threejs/);
-  assert.match(html, /资产检视/);
+  assert.match(html, /家具资产检视/);
+  assert.match(html, /内置与用户家具/);
+});
+
+test("keeps the former asset review URL compatible", async () => {
+  const response = await render("/asset-review?asset=crown-chest");
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /家具资产检视/);
 });
