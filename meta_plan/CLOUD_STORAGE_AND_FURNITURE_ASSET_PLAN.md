@@ -13,7 +13,7 @@
 目标能力：
 
 - 用户隔离的布局保存、读取、保存副本和版本恢复；
-- 家具资产、参考图、GLB、源码和审核证据的隔离存储；
+- 家具 manifest、TypeScript 源码、编译 ESM、资源、可选导出和审核证据的隔离对象存储；
 - 前端通过自然语言请求 Codex Agent 创建、包装、修改和验证家具；
 - 后端运行 `furniture-asset-packaging`，必要时只读调用 `img2threejs`；
 - 前端展示 Agent 进度、提问、审批、验证报告、模型预览和结果；
@@ -38,14 +38,14 @@ GitHub Pages ─────────┼── HTTPS API / SSE ── 自建�
                                                      ├── furniture-asset-packaging
                                                      ├── img2threejs（只读）
                                                      ├── Git / Node / Python / Chromium
-                                                     └── GLB 导出、重载和证据生成
+                                                     └── ESM 编译、运行验证和可选导出证据
 ```
 
 系统分为三个平面：
 
 1. **数据平面**：用户、布局、资产、版本、对象、审核和审计。
 2. **Agent 控制平面**：任务队列、状态机、事件、提问、审批、取消、重试和幂等。
-3. **Agent 执行平面**：Codex、技能、Git 工作区、构建、浏览器渲染、GLB 验证和候选准入。
+3. **Agent 执行平面**：Codex、技能、Git 工作区、ESM 构建、浏览器运行验证和候选准入。
 
 API 进程不能直接执行用户代码；Runner 不能持有生产数据库超级用户凭证或对象存储主密钥。
 
@@ -87,11 +87,11 @@ apps/web/lib/bedroom/assets/
 - `asset.json` 和 `runtime.ts` 必须存在；只有独立源模型有价值时才创建 `model.ts`；只有确有重建材料或持久化证据时才创建 `reconstruction/`、`evidence/`；
 - 项目直接产出的资产可以不创建两个可选目录，也不应为了目录外观提交占位文件。Git 不跟踪空目录；manifest 中没有重建信息时使用契约允许的缺省值或 `null`。
 
-后端对象存储和 Agent 工作区也必须保留这一逻辑包结构。上传、重建、验证和发布产生的文件先写入 revision 工作区，验证成功后再固化为不可变 artifact；不能为 `builtin` 和 `user-generated` 发明两套不兼容格式。
+后端对象存储和 Agent 工作区也必须保留这一逻辑作者包结构。云端发布时，受控 Runner 另行生成标准 ECMAScript Module `runtime/runtime.mjs`、资源和 `package-index.json`。上传、重建、验证和发布产生的文件先写入 revision 工作区，验证成功后再固化为不可变 artifact；不能为 `builtin` 和 `user-generated` 发明两套脚本语言或运行 ABI。
 
 ### 3.2 Manifest v3
 
-后端必须完整保存并验证以下契约：
+对象存储中的 `contract/asset.json` 必须完整保存以下契约，后端读取后验证；PostgreSQL 不保存其 JSONB 正文，只保存 package/manifest object key、SHA-256、schema 版本和控制面关系：
 
 ```text
 身份：schemaVersion、assetScope、id、name、category、status、origin、lifecyclePolicy
@@ -113,17 +113,17 @@ draft → candidate → approved → archived
 ```
 
 - `draft`：技术准备不完整、验证失败或证据过期。
-- `candidate`：尺寸、配置、状态、参数、组件、三种 purpose、GLB 和外观证据均完成，只等待视觉批准。
+- `candidate`：尺寸、配置、状态、参数、组件、三种 purpose、实际交付 ESM、资源完整性和外观证据均完成，只等待视觉批准；GLB 仅在请求导出或当前 v3 兼容门禁要求时作为附加证据。
 - `approved`：有效 candidate 经过用户批准，且批准 hash 与当前契约一致。
 - `archived`：不再使用，但保留历史。
 
-普通用户刚上传的参考图、GLB、JSON 或 JS/TS 都先进入 `draft`。
+普通用户刚上传的参考图、导出文件、JSON 或 JS/TS 都先进入 `draft`；任意源码默认不得获得浏览器执行权限。
 
-`contractHash` 覆盖可选 `model.ts`、必需 `runtime.ts`、尺寸和能力、状态和参数、组件和 bindings、验证矩阵、设计覆盖与 `exportCapabilities`；不覆盖状态、验证结果字段、时间戳、证据对象和批准 hash。后端同时保存 `raw_status` 与重新计算的 `effective_status`。任何模型或能力修改都会令旧证据失效，使有效状态回到 `draft`。
+仓库 v3 的 `contractHash` 继续覆盖可选 `model.ts`、必需 `runtime.ts` 和能力契约；独立的 `artifactSetHash` 覆盖 `package-index.json` 所描述对象的逻辑路径、SHA-256 和字节数，revision 再同时绑定这两个 hash 与 runtime ABI version。两类 hash 分开可避免 evidence 对 contractHash 的自引用循环。PostgreSQL 只保存 hash，不保存参与 hash 的正文。任何模型、依赖、资源或能力修改都会令旧证据失效，使有效状态回到 `draft`。
 
 ## 4. 仓库资产与云端用户资产
 
-当前动态加载器在构建时静态生成，上传 JS 到对象存储不会自动成为前端模块。因此保留两条路径。
+当前动态加载器在构建时静态生成，上传 TypeScript 到对象存储不会自动成为前端模块。因此保留两种交付 provider，但统一为标准 ESM 和同一家具 runtime ABI：仓库资产随站点构建，云端资产由受控 Runner 独立编译和发布。
 
 ### 4.1 仓库资产
 
@@ -141,18 +141,19 @@ Agent 创建 Git worktree
 ### 4.2 云端用户资产
 
 ```text
-上传参考图、GLB、JSON 或源码
+上传参考图、导出文件、JSON 或源码
 → 不可变 draft revision
-→ Agent/转换服务
-→ 输出 GLB 或安全 scene-json
-→ 完成 v3 契约和证据
+→ Agent + 隔离 Runner
+→ TypeScript 类型检查、封闭依赖并编译 runtime.mjs
+→ 上传 source/runtime/resources/evidence 和 package-index.json
+→ 完成 manifest 契约、ESM 运行证据和 artifact hash
 → candidate
 → 用户批准
 → approved
-→ 通用运行时加载器读取
+→ 通用 ESM runtime provider 读取
 ```
 
-普通用户资产不依赖重新构建站点。源码作为可复现来源保存，生产前端优先加载派生 GLB 或受约束 JSON。
+普通用户资产不依赖重新构建站点。TypeScript 作为可复现来源保存，生产前端加载平台构建并绑定当前 artifact hash 的标准 ESM。项目不自创家具脚本语言，也不把 GLB 作为默认浏览器运行载体。
 
 ## 5. 后端技术栈
 
@@ -179,7 +180,7 @@ Drizzle ORM
 PostgreSQL 18（始终更新到当前受支持 minor）
 ```
 
-选择原因：现有项目已使用 Node、TypeScript、Zod 和 Drizzle；Fastify适合 JSON API、签名上传和 SSE；PostgreSQL 统一承担业务记录、幂等、事件和初期队列。GLB、图片、源码包和大日志不进入数据库，只保存 object key、SHA-256、大小、MIME 和保留策略。
+选择原因：现有项目已使用 Node、TypeScript、Zod 和 Drizzle；Fastify适合 JSON API、签名上传和 SSE；PostgreSQL 统一承担业务记录、幂等、事件和初期队列。manifest、ESM、模型、材质、纹理、图片、源码包、可选导出和大日志均不进入数据库，只保存 object key、SHA-256、大小、MIME 和保留策略。
 
 建议采用 npm workspaces 的前后端分目录单仓库：
 
@@ -354,7 +355,7 @@ Git
 Codex CLI / SDK
 Chromium + Playwright 运行依赖
 Bash、字体、基础图像库
-Three.js/GLB 验证脚本
+Three.js/ESM 运行验证脚本和可选导出验证
 ```
 
 img2threejs 核心使用 Python 3.10+ 标准库，不把 SAM2、Depth Anything 等大型可选依赖放进默认 CPU 环境；它们后续使用独立 GPU Runner、依赖环境与队列。
@@ -383,9 +384,9 @@ img2threejs 核心使用 Python 3.10+ 标准库，不把 SAM2、Depth Anything �
 ## 8. 用户代码隔离
 
 ```text
-上传 JS/TS → draft revision → 静态检查 → 加强隔离 Runner
-→ 限时编译执行 → 检查 THREE.Group 和预算 → 导出安全派生资产
-→ 证据 → candidate
+上传 JS/TS → quarantined-source draft → 静态检查 → 加强隔离 Runner
+→ 限时编译为封闭 runtime.mjs → 检查 ABI、THREE.Group、资源和预算
+→ 写入不可变 package index → ESM 运行证据 → platform-built-esm candidate
 ```
 
 禁止在前端、API 或普通共享 Runner 使用 `eval`、`new Function`、Blob 动态导入、script 注入、用户 npm lifecycle、宿主 Docker socket或继承宿主密钥。
@@ -408,14 +409,14 @@ audit_events / storage_objects / idempotency_keys
 
 ### 9.2 资产
 
-`assets` 保存租户、所有者、名称、类别、scope、lifecycle policy 和 current revision；`asset_revisions` 保存 parent、manifest schema、raw/effective status、contract hash、manifest/source/runtime object key 和 Agent run 来源。每次修改创建新 revision。
+`assets` 保存租户、所有者、名称、类别、稳定 `asset_key`、scope、lifecycle policy、独立 execution policy 和 current/published revision。`asset_revisions` 只保存 parent、manifest schema、runtime ABI version、raw/effective status、contract/artifact-set hash、package root key、package-index key/hash 和 Agent run 来源。每次内容修改创建新 revision；数据库不保存 manifest JSONB、源码、运行模块、模型、材质、纹理或证据正文。
 
 `asset_artifacts.kind` 至少包括：
 
 ```text
-manifest、reference-image、source-model、runtime
-reconstruction-state、reconstruction-spec、candidate-report、glb-report
-material-evidence、appearance-comparison、derived-glb、scene-json
+package-index、manifest、source-runtime、source-model、runtime-esm、runtime-resource
+reference-image、reconstruction-state、reconstruction-spec、candidate-report、esm-runtime-report
+material-evidence、appearance-comparison、optional-export-glb
 thumbnail、source-bundle、sanitized-log
 ```
 
@@ -429,17 +430,20 @@ thumbnail、source-bundle、sanitized-log
 tenants/{tenantId}/
 ├── layouts/{layoutId}/versions/{versionId}/layout.json
 ├── assets/{assetId}/revisions/{revisionId}/
-│   ├── manifest/asset.json
-│   ├── source/source-bundle.tar.zst
-│   ├── source/reference-01.webp
-│   ├── derived/model.glb
-│   ├── derived/scene.json
+│   ├── package-index.json
+│   ├── contract/asset.json
+│   ├── source/runtime.ts
+│   ├── source/model.ts                         optional
+│   ├── source/resources/...
+│   ├── runtime/runtime.mjs
+│   ├── runtime/resources/...
 │   ├── derived/thumbnail.webp
+│   ├── exports/model.glb                       optional
 │   └── evidence/...
 └── agent-runs/{runId}/input|output|logs/...
 ```
 
-key 由后端生成；revision artifact 不可变；全部有 SHA-256；默认私有；上传后复核字节数、hash、MIME 和文件头；临时区与正式区分开；定期清理未完成 multipart upload。
+key 由后端生成；revision artifact 不可变；全部有 SHA-256；默认私有；上传后复核字节数、hash、MIME 和文件头；`package-index.json` 最后写入并成为 revision 内容入口。PostgreSQL 只保存这些 key/hash 和关系，不保存对象正文。临时区与正式区分开；定期清理未完成 multipart upload。
 
 ## 11. 服务器配置与磁盘
 
@@ -455,7 +459,7 @@ key 由后端生成；revision artifact 不可变；全部有 SHA-256；默认�
 |---|---:|---:|---:|---:|
 | 布局分析/JSON | 1–2 vCPU | 2–4 GB | 2 GB | 10–20 分钟 |
 | manifest/wrapper 修改 | 2 vCPU | 4–6 GB | 10 GB | 20–30 分钟 |
-| 打包 + 全配置 GLB | 4 vCPU | 8 GB | 20 GB | 30–60 分钟 |
+| 打包 + 全配置 ESM/可选导出 | 4 vCPU | 8 GB | 20 GB | 30–60 分钟 |
 | 完整 img2threejs | 4 vCPU | 8–12 GB | 30 GB | 60–120 分钟 |
 | 可选本地视觉模型 | 4–8 vCPU | 16–32 GB | 40 GB | 60–120 分钟 |
 
@@ -493,7 +497,7 @@ Runner × 2：每台 8 vCPU / 32 GB / 250 GB NVMe
 
 ### 11.6 容量公式
 
-每个家具 revision 粗略预算：参考图 2–20 MB；manifest/源码/spec/state 1–10 MB；GLB 1–50 MB；缩略图 0.1–1 MB；多视角和材质证据 10–150 MB；报告/脱敏日志 1–20 MB。
+每个家具 revision 粗略预算：参考图 2–20 MB；manifest/源码/spec/state 1–10 MB；ESM/运行资源 1–50 MB；可选导出 1–50 MB；缩略图 0.1–1 MB；多视角和材质证据 10–150 MB；报告/脱敏日志 1–20 MB。
 
 标准 revision 按 **250 MB**，高保真按 **500 MB–1 GB** 规划。
 
@@ -503,7 +507,7 @@ Runner × 2：每台 8 vCPU / 32 GB / 250 GB NVMe
   + 布局版本 + 30% 余量
 ```
 
-例如 100 用户 × 20 资产 × 3 revision × 250 MB = 1.5 TB；加 30% 后约 2 TB。布局 JSON 远小于家具证据，家具截图/GLB 是主要容量。
+例如 100 用户 × 20 资产 × 3 revision × 250 MB = 1.5 TB；加 30% 后约 2 TB。布局 JSON 远小于家具资源和验证证据，纹理、截图与可选导出通常是主要容量。
 
 Runner 磁盘最低公式：
 
@@ -576,7 +580,7 @@ npm run deploy:web:pages
 
 ### C：共享协议
 
-抽取布局 Schema、manifest v3、Agent event 和 API DTO；加入本地/远程 API adapter；定义 GLB/scene-json 云端加载接口。
+抽取布局 Schema、manifest v3、Agent event 和 API DTO；加入本地/远程 API adapter；定义 package index、标准 ESM runtime ABI 和云端加载接口。
 
 ### D：可开发的最小数据后端
 
@@ -592,7 +596,7 @@ npm run deploy:web:pages
 
 ### G：普通用户家具 Agent
 
-加入租户工作区隔离、参考图创建、提示词修改、draft/candidate/批准、派生 GLB/JSON、配额和成本限制。
+加入租户工作区隔离、参考图创建、提示词修改、draft/candidate/批准、TypeScript 到 ESM 发布包、资源签名读取、配额和成本限制。
 
 ### H：用户 JS/TS 沙箱
 
@@ -604,11 +608,11 @@ npm run deploy:web:pages
 |---|---|---|
 | A | 完成 | 三套布局、本地保存/副本、manifest v3、动态加载、审核与资产门禁测试保持通过。 |
 | B | 完成 | 前端迁入 `apps/web`，根目录改为 npm workspaces；Sites 与 Pages 使用独立构建命令。 |
-| C | 基础完成 | layout、manifest、Agent event、API DTO、SSE 解码和远程布局 adapter 已抽到共享包；云端 GLB/scene-json 产品加载仍随 G 阶段接入。 |
-| D | 开发基础完成 | PostgreSQL schema/migration、内存与 PostgreSQL repository、filesystem/S3 adapter、OIDC 验证入口和布局/资产 API 已实现。配额执行、完整 audit 写入、浏览器签名上传流程以及真实 PostgreSQL/S3/OIDC 集成验收尚未完成。 |
+| C | 基础完成 | layout、manifest、Agent event、API DTO、SSE 解码、package index、ESM runtime ABI、远程布局 adapter 和云端家具目录 DTO 已抽到共享包。 |
+| D | 开发基础完成 | PostgreSQL schema/migration、keys-only asset revision、通用 artifact 索引、内存与 PostgreSQL repository、filesystem/S3 adapter、OIDC 验证入口和布局/资产 API 已实现；修订注册会复核包边界、hash、大小和 MIME。配额执行、完整 audit 写入、浏览器签名上传流程以及真实 PostgreSQL/S3/OIDC 集成验收尚未完成。 |
 | E | 开发基础完成 | Agent run、全序公开事件、SSE replay、幂等创建/消息/审批、模拟 Worker、超时和心跳字段已实现。持久化 request 生命周期、运行中跨进程取消、死任务回收和负载故障测试仍待完成。 |
-| F | 执行骨架完成 | 独立 Worker、pg-boss、受限工作区/worktree、Codex App Server stdio 握手、turn 事件映射和低权限 systemd 模板已实现。家具包装技能的真实端到端 artifact/candidate 发布、管理员私测和可复现 Runner 镜像尚未完成。 |
-| G | 部分界面完成 | Web Agent 面板可创建 run、增量读取/恢复 SSE、取消、补充信息和审批；普通用户参考图到派生 GLB/scene-json 的完整链路、配额和成本策略尚未实现。 |
+| F | 执行骨架完成 | 独立 Worker、pg-boss、受限工作区/worktree、Codex App Server stdio 握手、turn 事件映射和低权限 systemd 模板已实现。家具包装 skill 已能构建 package-index/runtime.mjs 并实际导入验收；管理员私测、受控上传串联和可复现 Runner 镜像尚未完成。 |
+| G | 部分界面完成 | Web Agent 面板可创建 run、增量读取/恢复 SSE、取消、补充信息和审批；Web 也可读取已发布目录并按 revision 动态 import ESM。普通用户参考图到受控上传/策略晋级的完整产品流程、配额和成本策略尚未实现。 |
 | H | 未开始 | 任意用户 JS/TS 仍禁止在生产执行；加强隔离 Runner 和故障演练是开放前硬门禁。 |
 
 本轮只修改仓库代码、迁移、测试、文档和基础设施模板；没有部署 Sites/Pages，没有启动或迁移生产数据库，没有创建 S3 bucket/OIDC 客户端，也没有变更线上 DNS、TLS 或账号。`infra/` 中的 Caddy/systemd 文件必须在目标主机上经真实密钥管理、备份和恢复演练后才能视为生产配置。
@@ -618,6 +622,8 @@ npm run deploy:web:pages
 - manifest v3 是唯一家具契约；
 - raw/effective status 分离；Agent 与资产状态分离；
 - revision/artifact 不可变且有 SHA-256；
+- PostgreSQL 只保存资产控制面字段、对象 key/hash 和关系，不保存任何资产正文；
+- 云端运行模块是平台构建的标准 ESM，并通过实际交付路径验证；
 - 只有有效 approved 进入正式目录；
 - 技能与 Runner 版本可追溯；
 - `builtin` 生成资产的 reconstruction/evidence 可选内容可以完整往返，直接项目资产无需空目录；
@@ -639,7 +645,7 @@ npm run deploy:web:pages
 4. 开发阶段用可切换的 filesystem 存储，按需使用 MinIO 验证 S3 语义；正式环境优先独立 S3 兼容对象存储。
 5. 所有面向用户的 LLM 回答都包装为 Agent run，通过统一、可恢复的 SSE 推送文本增量、工具状态、提问和最终结果；一次性后台任务仍可使用 `codex exec --json`。
 6. MVP 直接以独立进程运行 API 与 Agent Worker；前端自部署缺省端口为 `5555`，API 缺省端口为 `3333`，两者都可配置；容器化延后到生产隔离阶段。
-7. `builtin` 与 `user-generated` 使用同一 v3 包契约；两者都允许可选 `model.ts`、`reconstruction/` 和 `evidence/`，`builtin` 也可以由生成流程产出。
+7. `builtin` 与 `user-generated` 使用同一作者包契约和标准 ESM runtime ABI；两者都允许可选 `model.ts`、resources、`reconstruction/` 和 `evidence/`，区别仅是仓库构建或云端 Runner 发布。
 8. Sites 和 GitHub Pages 只部署 `apps/web`；Pages 使用仓库 base path，二者通过绝对 HTTPS API 地址连接自建后端。
 9. 默认 CPU Runner；可选视觉模型使用独立 GPU Runner。
 10. 最低开发服务器为 4 vCPU、16 GB、200 GB NVMe、单任务并发。

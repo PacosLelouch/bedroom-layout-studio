@@ -11,6 +11,10 @@ the named component/property. Unchanged regions remain reference-locked.
   missing component hierarchy/pivot that cannot be repaired reliably.
 - Continuous animation, physics, or electrical behavior is outside the finite-state contract; name
   the required application-contract expansion instead of hiding functions in `userData`.
+- Keep behavior in standard TypeScript/ECMAScript. Do not replace a requested scripted model with a
+  project-specific scene language. For cloud delivery, rebuild the closed ESM publication package,
+  resources, package index, and artifact-set hash after any source or dependency change.
 
 Any capability or factory edit changes the contract hash. Treat the asset as draft until the full
-matrix and GLB evidence have been regenerated.
+matrix and actual delivery-runtime evidence have been regenerated. Regenerate GLB evidence as well
+when the current v3 compatibility gate or an explicit export requirement applies.

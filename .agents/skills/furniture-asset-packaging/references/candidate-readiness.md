@@ -1,10 +1,21 @@
 # Candidate readiness
 
-Run structural validation with `node .agents/skills/furniture-asset-packaging/scripts/validate_furniture_asset.mjs <id> --scope <builtin|user-generated> --candidate --out <report>`.
-Run GLB validation with `node .agents/skills/furniture-asset-packaging/scripts/smoke_export_glb.mjs <id> --scope <builtin|user-generated> --out <report>`.
+Validate the artifact that users will actually run. A repository asset is exercised through its
+site-bundled module. A cloud asset must be exercised through the compiled `runtime/runtime.mjs` and
+package-index resource resolver, with evidence bound to the published artifact-set hash. Loading
+the TypeScript source through Vite is not sufficient evidence for a cloud publication.
 
-Inspect the portable material path and compare source/export-reload appearance. When both are
-accepted, run `admit_furniture_candidate.mjs <id> --scope <builtin|user-generated> --materials-accepted --material-evidence <path>
+Compiled ESM validation is mandatory for both repository and cloud admission. If the ESM validator
+is unavailable, keep the revision `draft` rather than claiming candidate readiness. GLB
+export/reload is an optional portability gate, enabled only when the revision claims GLB export.
+
+Run structural validation with `node .agents/skills/furniture-asset-packaging/scripts/validate_furniture_asset.mjs <id> --scope <builtin|user-generated> --candidate --out <report>`.
+Run browser-artifact validation with `node .agents/skills/furniture-asset-packaging/scripts/smoke_runtime_esm.mjs <id> --scope <builtin|user-generated> --out <report>`.
+Build an immutable publication package with `node .agents/skills/furniture-asset-packaging/scripts/build_furniture_package.mjs <id> --scope <builtin|user-generated> --tenant-id <uuid> --asset-id <uuid> --revision-id <uuid> --out <dir>`.
+
+For normal ESM-only admission run `admit_furniture_candidate.mjs <id> --scope <builtin|user-generated>`.
+When GLB is a declared deliverable, inspect the portable material path and source/export-reload
+appearance, then add `--validate-glb --materials-accepted --material-evidence <path>
 --appearance-accepted --appearance-evidence <path>`.
 Admission writes evidence, changes status to candidate, synchronizes registries, and verifies the
 project. Failure writes an explicit draft with stale evidence cleared and re-synchronizes registries.

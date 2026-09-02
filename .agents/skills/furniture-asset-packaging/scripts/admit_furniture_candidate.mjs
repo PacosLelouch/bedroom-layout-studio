@@ -5,8 +5,16 @@ import { promisify } from "node:util";
 import { computeFurnitureAssetContractHash, readFurniturePackageContractSources } from "../../../../apps/web/scripts/furniture-asset-contract.mjs";
 
 const run = promisify(execFile);
+
+function runNpm(args, options) {
+  if (process.platform !== "win32") return run("npm", args, options);
+  const commandProcessor = process.env.ComSpec ?? "C:\\Windows\\System32\\cmd.exe";
+  return run(commandProcessor, ["/d", "/s", "/c", "npm.cmd", ...args], options);
+}
+
 const projectRoot = process.cwd();
 const assetId = process.argv[2];
+const validateGlb = process.argv.includes("--validate-glb");
 const materialsAccepted = process.argv.includes("--materials-accepted");
 const appearanceAccepted = process.argv.includes("--appearance-accepted");
 const materialEvidenceIndex = process.argv.indexOf("--material-evidence");
@@ -14,7 +22,7 @@ const appearanceEvidenceIndex = process.argv.indexOf("--appearance-evidence");
 const materialEvidence = materialEvidenceIndex >= 0 ? path.resolve(projectRoot, process.argv[materialEvidenceIndex + 1]) : null;
 const appearanceEvidence = appearanceEvidenceIndex >= 0 ? path.resolve(projectRoot, process.argv[appearanceEvidenceIndex + 1]) : null;
 const skipProjectChecks = process.argv.includes("--skip-project-checks");
-if (!assetId || !materialsAccepted || !appearanceAccepted || !materialEvidence || !appearanceEvidence) throw new Error("Usage: node admit_furniture_candidate.mjs <asset-id> [--scope builtin|user-generated] --materials-accepted --material-evidence <path> --appearance-accepted --appearance-evidence <path> [--skip-project-checks]");
+if (!assetId || validateGlb && (!materialsAccepted || !appearanceAccepted || !materialEvidence || !appearanceEvidence)) throw new Error("Usage: node admit_furniture_candidate.mjs <asset-id> [--scope builtin|user-generated] [--validate-glb --materials-accepted --material-evidence <path> --appearance-accepted --appearance-evidence <path>] [--skip-project-checks]");
 const scopeIndex = process.argv.indexOf("--scope");
 const assetScope = scopeIndex >= 0 ? process.argv[scopeIndex + 1] : "user-generated";
 if (!["builtin", "user-generated"].includes(assetScope)) throw new Error("--scope 必须是 builtin 或 user-generated");
@@ -23,9 +31,10 @@ const manifestPath = path.join(assetDir, "asset.json");
 const evidenceDir = path.join(assetDir, "evidence");
 const candidateReportPath = path.join(evidenceDir, "candidate-report.json");
 const glbReportPath = path.join(evidenceDir, "glb-report.json");
+const runtimeReportPath = path.join(evidenceDir, "runtime-esm-report.json");
 const originalText = await readFile(manifestPath, "utf8");
 const original = JSON.parse(originalText);
-const proposed = { ...original, status: "draft", exportReady: true, exportIssue: undefined, candidateEvidence: null, exportEvidence: null, approvedFactoryHash: null, reviewedAt: null };
+const proposed = { ...original, status: "draft", exportReady: validateGlb, exportIssue: validateGlb ? undefined : "GLB export was not requested for this revision.", candidateEvidence: null, runtimeEvidence: null, exportEvidence: null, approvedFactoryHash: null, reviewedAt: null };
 if (proposed.assetScope !== assetScope) throw new Error(`assetScope 必须是 ${assetScope}`);
 const { modelSource, runtimeSource } = await readFurniturePackageContractSources(assetDir);
 const contractHash = computeFurnitureAssetContractHash(modelSource, runtimeSource, proposed);
@@ -50,17 +59,19 @@ async function atomicJson(filePath, value) {
 await mkdir(evidenceDir, { recursive: true });
 try {
   await atomicJson(manifestPath, proposed);
-  const materialEvidenceEnvelope = await readAcceptedEvidence(materialEvidence, "material-review");
-  const appearanceEvidenceEnvelope = await readAcceptedEvidence(appearanceEvidence, "source-reload-comparison");
+  const materialEvidenceEnvelope = validateGlb ? await readAcceptedEvidence(materialEvidence, "material-review") : null;
+  const appearanceEvidenceEnvelope = validateGlb ? await readAcceptedEvidence(appearanceEvidence, "source-reload-comparison") : null;
   const validateScript = path.join(import.meta.dirname, "validate_furniture_asset.mjs");
   const smokeScript = path.join(import.meta.dirname, "smoke_export_glb.mjs");
+  const runtimeScript = path.join(import.meta.dirname, "smoke_runtime_esm.mjs");
   await run(process.execPath, [validateScript, assetId, "--scope", assetScope, "--candidate", "--out", candidateReportPath], { cwd: projectRoot });
-  await run(process.execPath, [smokeScript, assetId, "--scope", assetScope, "--out", glbReportPath], { cwd: projectRoot });
+  await run(process.execPath, [runtimeScript, assetId, "--scope", assetScope, "--out", runtimeReportPath], { cwd: projectRoot, maxBuffer: 10 * 1024 * 1024 });
+  if (validateGlb) await run(process.execPath, [smokeScript, assetId, "--scope", assetScope, "--out", glbReportPath], { cwd: projectRoot });
   const candidateReport = JSON.parse(await readFile(candidateReportPath, "utf8"));
-  const glbReport = JSON.parse(await readFile(glbReportPath, "utf8"));
-  glbReport.materialsAccepted = true;
-  glbReport.sourceReloadAppearanceAccepted = true;
-  if (candidateReport.contractHash !== contractHash || glbReport.contractHash !== contractHash) throw new Error("验证期间能力契约发生变化");
+  const runtimeReport = JSON.parse(await readFile(runtimeReportPath, "utf8"));
+  const glbReport = validateGlb ? JSON.parse(await readFile(glbReportPath, "utf8")) : null;
+  if (glbReport) { glbReport.materialsAccepted = true; glbReport.sourceReloadAppearanceAccepted = true; }
+  if (candidateReport.contractHash !== contractHash || runtimeReport.contractHash !== contractHash || glbReport && glbReport.contractHash !== contractHash) throw new Error("验证期间能力契约发生变化");
   const now = new Date().toISOString();
   const admitted = {
     ...proposed,
@@ -69,26 +80,31 @@ try {
       reportPath: path.relative(projectRoot, candidateReportPath).replaceAll("\\", "/"), verifiedAt: now, contractHash,
       configurationCount: candidateReport.configurations.length, statesCovered: candidateReport.statesCovered,
       parametersCovered: candidateReport.parametersCovered, purposesCovered: candidateReport.purposesCovered,
-      structuralChecksPassed: true, behaviorChecksPassed: true, glbChecksPassed: true,
+      structuralChecksPassed: true, behaviorChecksPassed: true, runtimeChecksPassed: true, ...(validateGlb ? { glbChecksPassed: true } : {}),
     },
-    exportEvidence: {
+    runtimeEvidence: {
+      reportPath: path.relative(projectRoot, runtimeReportPath).replaceAll("\\", "/"), verifiedAt: now, contractHash,
+      runtimeAbiVersion: 1, artifactSetHash: runtimeReport.artifactSetHash, configurationsTested: runtimeReport.configurationsTested,
+      moduleLoaded: runtimeReport.moduleLoaded, resourcesVerified: runtimeReport.resourcesVerified, dimensionsMatch: runtimeReport.dimensionsMatch,
+      grounded: runtimeReport.grounded, namedNodesPreserved: runtimeReport.namedNodesPreserved, deterministic: runtimeReport.deterministic,
+    },
+    exportEvidence: glbReport ? {
       reportPath: path.relative(projectRoot, glbReportPath).replaceAll("\\", "/"), verifiedAt: now, contractHash,
       configurationsTested: glbReport.configurationsTested, stateIds: glbReport.stateIds,
       dimensionsMatch: glbReport.dimensionsMatch, grounded: glbReport.grounded,
       namedNodesPreserved: glbReport.namedNodesPreserved, materialsPortable: glbReport.materialsPortable,
       materialsAccepted: true, sourceReloadAppearanceAccepted: true,
-      materialReviewPath: path.relative(projectRoot, materialEvidence).replaceAll("\\", "/"),
-      sourceReloadComparisonPath: path.relative(projectRoot, appearanceEvidence).replaceAll("\\", "/"),
-    },
+      materialReviewPath: path.relative(projectRoot, materialEvidence).replaceAll("\\", "/"), sourceReloadComparisonPath: path.relative(projectRoot, appearanceEvidence).replaceAll("\\", "/"),
+    } : null,
   };
   await atomicJson(candidateReportPath, { ...candidateReport, verifiedAt: now });
-  await atomicJson(glbReportPath, { ...glbReport, verifiedAt: now, materialEvidence: materialEvidenceEnvelope, appearanceEvidence: appearanceEvidenceEnvelope });
+  await atomicJson(runtimeReportPath, { ...runtimeReport, verifiedAt: now });
+  if (glbReport) await atomicJson(glbReportPath, { ...glbReport, verifiedAt: now, materialEvidence: materialEvidenceEnvelope, appearanceEvidence: appearanceEvidenceEnvelope });
   await atomicJson(manifestPath, admitted);
   await run(process.execPath, [path.join(projectRoot, "apps", "web", "scripts", "sync-furniture-assets.mjs")], { cwd: path.join(projectRoot, "apps", "web") });
   if (!skipProjectChecks) {
-    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-    await run(npm, ["run", "assets:check"], { cwd: projectRoot });
-    await run(npm, ["run", "build"], { cwd: projectRoot, maxBuffer: 10 * 1024 * 1024 });
+    await runNpm(["run", "assets:check"], { cwd: projectRoot });
+    await runNpm(["run", "build"], { cwd: projectRoot, maxBuffer: 10 * 1024 * 1024 });
   }
   console.log(`Furniture asset ${assetId} is technically ready and registered as candidate.`);
 } catch (error) {
@@ -99,6 +115,7 @@ try {
     exportReady: false,
     exportIssue: `Candidate admission failed: ${failureMessage}`,
     candidateEvidence: null,
+    runtimeEvidence: null,
     exportEvidence: null,
     approvedFactoryHash: null,
     reviewedAt: null,

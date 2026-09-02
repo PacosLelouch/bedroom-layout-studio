@@ -1,13 +1,14 @@
-# Bedroom furniture asset contract v3
+# Bedroom furniture source contract
 
-Every furniture package has the same physical and logical shape. The only directory-level split is
-delivery ownership:
+Every furniture authoring package has the same physical and logical shape. The only directory-level
+split is delivery ownership:
 
 ```text
 apps/web/lib/bedroom/assets/<builtin|user-generated>/<asset-id>/
 ├─ asset.json       # required manifest v3
 ├─ runtime.ts       # required; exports createFurnitureModel
 ├─ model.ts         # optional; exports createSourceModel
+├─ resources/       # optional textures and runtime resources
 ├─ reconstruction/ # optional source/spec/workflow state
 └─ evidence/       # optional contract-hashed reports
 ```
@@ -27,6 +28,12 @@ The runtime factory accepts `FurnitureConfiguration` plus purpose `scene | revie
 same configuration is deterministic, Y-up, grounded, and centered. Export omits lights, helpers,
 review decoration, runtime shaders, and behavior that exists only as a function in `userData`.
 
+This directory is an authoring package, not the cloud browser transport. TypeScript is compiled by
+the repository build or a controlled cloud publication build. Cloud delivery emits a standard
+ECMAScript module with the same factory semantics; it does not emit a custom scene language and
+does not use GLB as the browser runtime. Read [cloud runtime packaging](cloud-runtime-packaging.md)
+before producing a remote revision.
+
 Manifest v3 declares identity, scope, modeling provenance, lifecycle, appearance, dimensions,
 parameters, finite states, semantic components, capability bindings, validation configurations,
 design overrides, placement policies, reconstruction provenance, and evidence. A movable component
@@ -38,8 +45,12 @@ error. Images establish form and proportion, never millimeter dimensions.
 bounds; `clearancePolicy` describes operational space. A bounded validation matrix contains the
 exact default and controlled pairs for every capability.
 
-The contract hash covers `model.ts` when present, `runtime.ts`, and capability fields. It excludes
-status, timestamps, approval hash, readiness flags, and evidence objects. Evidence must reference
-the current hash; a mismatch makes effective status draft. Candidate GLB evidence covers every
-validation configuration, reloaded dimensions and grounding, required nodes, and portable defining
-appearance.
+For repository-only v3 packages, the current contract hash covers `model.ts` when present,
+`runtime.ts`, and capability fields. For cloud publication the approved contract must additionally
+bind the runtime ABI version and the complete published artifact-set hash. Evidence must reference
+the current contract hash; a mismatch makes effective status draft. GLB may remain export and
+portability evidence, but ESM publication requires evidence from the actual compiled runtime module.
+
+Database rows never contain this manifest or any other asset body. They may contain its object key,
+SHA-256, schema version, lifecycle status, and revision relationships. Object storage is the byte
+source of truth.

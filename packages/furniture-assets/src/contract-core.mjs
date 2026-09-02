@@ -146,7 +146,7 @@ export function validateFurnitureAssetManifest(manifest, { requireCandidateReady
     if (!manifest.validationConfigurations.length) issues.push("候选资产需要验证配置");
     if (manifest.states.length ? !stateIds.includes(manifest.defaultConfiguration?.stateId) : manifest.defaultConfiguration?.stateId !== null) issues.push("默认状态无效");
     for (const [id, definition] of definitions) if (!parameterValueValid(definition, manifest.defaultConfiguration?.parameters?.[id])) issues.push(`默认参数 ${id} 无效`);
-    if (!manifest.exportReady || manifest.exportIssue) issues.push("候选资产必须完成 GLB 兼容准备");
+    if (manifest.exportReady && manifest.exportIssue) issues.push("声明可导出 GLB 时不能同时存在 exportIssue");
   }
   return [...new Set(issues)];
 }
@@ -154,8 +154,10 @@ export function validateFurnitureAssetManifest(manifest, { requireCandidateReady
 export function furnitureCandidateReadinessIssues(manifest, contractHash) {
   const issues = validateFurnitureAssetManifest(manifest, { requireCandidateReady: true });
   const candidate = manifest.candidateEvidence;
+  const runtime = manifest.runtimeEvidence;
   const exported = manifest.exportEvidence;
-  if (!candidate || candidate.contractHash !== contractHash || !candidate.structuralChecksPassed || !candidate.behaviorChecksPassed || !candidate.glbChecksPassed || PURPOSES.some((purpose) => !candidate.purposesCovered?.includes(purpose))) issues.push("候选证据缺失、失败或已过期");
-  if (!exported || exported.contractHash !== contractHash || !exported.dimensionsMatch || !exported.grounded || !exported.namedNodesPreserved || !exported.materialsPortable || !exported.materialsAccepted || !exported.sourceReloadAppearanceAccepted || !exported.materialReviewPath || !exported.sourceReloadComparisonPath) issues.push("GLB 证据缺失、失败或已过期");
+  if (!candidate || candidate.contractHash !== contractHash || !candidate.structuralChecksPassed || !candidate.behaviorChecksPassed || !candidate.runtimeChecksPassed || PURPOSES.some((purpose) => !candidate.purposesCovered?.includes(purpose))) issues.push("候选证据缺失、失败或已过期");
+  if (!runtime || runtime.contractHash !== contractHash || runtime.runtimeAbiVersion !== 1 || !runtime.moduleLoaded || !runtime.resourcesVerified || !runtime.dimensionsMatch || !runtime.grounded || !runtime.namedNodesPreserved || !runtime.deterministic || !(runtime.configurationsTested > 0) || !/^[a-f0-9]{64}$/.test(runtime.artifactSetHash ?? "")) issues.push("浏览器 ESM 运行时证据缺失、失败或已过期");
+  if (manifest.exportReady && (!exported || exported.contractHash !== contractHash || !exported.dimensionsMatch || !exported.grounded || !exported.namedNodesPreserved || !exported.materialsPortable || !exported.materialsAccepted || !exported.sourceReloadAppearanceAccepted || !exported.materialReviewPath || !exported.sourceReloadComparisonPath)) issues.push("已声明 GLB 可导出，但 GLB 证据缺失、失败或已过期");
   return [...new Set(issues)];
 }
