@@ -20,7 +20,8 @@ export interface FurnitureComponentDefinition { id: string; label: string; nodeN
 export interface FurnitureCapabilityBinding { capabilityId: string; componentIds: string[]; effect: "geometry" | "material" | "visibility" | "transform" | "behavior" | "dimensions"; activeStateIds?: string[] }
 export interface FurnitureValidationConfiguration extends FurnitureConfiguration { id: string; compareAgainst?: string; testsCapability?: string; importantCombination?: boolean }
 export interface FurnitureDesignOverride { componentId: string; property: string; instruction: string; source: "user"; targetValue?: string | number | boolean }
-export interface FurnitureCandidateEvidence { reportPath: string; verifiedAt: string; contractHash: string; configurationCount: number; statesCovered: string[]; parametersCovered: Array<{ id: string; values: Array<string | number | boolean> }>; purposesCovered: Array<"scene" | "review" | "export">; structuralChecksPassed: boolean; behaviorChecksPassed: boolean; glbChecksPassed: boolean }
+export interface FurnitureRuntimeEvidence { reportPath: string; verifiedAt: string; contractHash: string; runtimeAbiVersion: 1; artifactSetHash: string; configurationsTested: number; moduleLoaded: boolean; resourcesVerified: boolean; dimensionsMatch: boolean; grounded: boolean; namedNodesPreserved: boolean; deterministic: boolean }
+export interface FurnitureCandidateEvidence { reportPath: string; verifiedAt: string; contractHash: string; configurationCount: number; statesCovered: string[]; parametersCovered: Array<{ id: string; values: Array<string | number | boolean> }>; purposesCovered: Array<"scene" | "review" | "export">; structuralChecksPassed: boolean; behaviorChecksPassed: boolean; runtimeChecksPassed: boolean; glbChecksPassed?: boolean }
 
 export interface FurnitureAssetManifestV3 {
   schemaVersion: 3;
@@ -42,6 +43,7 @@ export interface FurnitureAssetManifestV3 {
   validationConfigurations: FurnitureValidationConfiguration[];
   designOverrides: FurnitureDesignOverride[];
   candidateEvidence: FurnitureCandidateEvidence | null;
+  runtimeEvidence?: FurnitureRuntimeEvidence | null;
   footprintPolicy: FurnitureFootprintPolicy;
   clearancePolicy: FurnitureClearancePolicy;
   exportCapabilities: { formats: Array<"glb">; materialPolicy: "portable-pbr"; preserveComponentNodes: boolean };

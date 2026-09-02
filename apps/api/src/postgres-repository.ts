@@ -5,7 +5,7 @@ import type { AgentRunDto, AgentRunIntent, AgentRunStatus, PublicAgentEvent, Pub
 import type { BedroomDatabase } from "@bedroom/database";
 import { databaseSchema as s } from "@bedroom/database";
 import type { RequestIdentity } from "./auth.js";
-import type { AssetRecord, AssetRevisionRecord, ControlPlaneRepository, LayoutRecord, LayoutVersionRecord } from "./repository.js";
+import type { AssetRecord, AssetRevisionRecord, ControlPlaneRepository, CreateAssetRevisionInput, LayoutRecord, LayoutVersionRecord, PublishedAssetRecord } from "./repository.js";
 import { requestHash } from "./repository.js";
 import { developmentIdentity } from "./auth.js";
 
@@ -109,12 +109,12 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
     return rows.map(assetRecord);
   }
 
-  async createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "createdAt"> & { idempotencyKey: string }) {
+  async createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "publishedRevisionId" | "createdAt"> & { idempotencyKey: string }) {
     return this.db.transaction(async (tx) => {
       const scope = "asset:create"; const previous = await readIdempotency(tx, identity, scope, input.idempotencyKey);
       if (previous) { const [asset] = await tx.select().from(s.assets).where(assetScope(identity, previous.assetId as string)).limit(1); if (!asset) throw notFound("asset_not_found", "Asset was not found."); return { asset: assetRecord(asset), reused: true }; }
-      const id = randomUUID(); const slug = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "asset"}-${id.slice(0, 8)}`;
-      const [created] = await tx.insert(s.assets).values({ id, tenantId: identity.tenantId, workspaceId: identity.workspaceId, ownerUserId: identity.userId, slug, name: input.name, category: input.category, scope: input.assetScope, lifecyclePolicy: input.lifecyclePolicy }).returning();
+      const id = randomUUID();
+      const [created] = await tx.insert(s.assets).values({ id, tenantId: identity.tenantId, workspaceId: identity.workspaceId, ownerUserId: identity.userId, assetKey: input.assetKey, name: input.name, category: input.category, scope: input.assetScope, lifecyclePolicy: input.lifecyclePolicy, executionPolicy: input.executionPolicy }).returning();
       await writeIdempotency(tx, identity, scope, input.idempotencyKey, input, { assetId: id }, 201);
       return { asset: assetRecord(created), reused: false };
     });
@@ -126,14 +126,15 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
     return rows.map(assetRevisionRecord);
   }
 
-  async createAssetRevision(identity: RequestIdentity, assetId: string, input: Omit<AssetRevisionRecord, "id" | "assetId" | "effectiveStatus" | "createdAt"> & { idempotencyKey: string }) {
+  async createAssetRevision(identity: RequestIdentity, assetId: string, input: CreateAssetRevisionInput) {
     return this.db.transaction(async (tx) => {
       const scope = `asset:${assetId}:revision`; const previous = await readIdempotency(tx, identity, scope, input.idempotencyKey);
       if (previous) { const [revision] = await tx.select().from(s.assetRevisions).where(and(eq(s.assetRevisions.assetId, assetId), eq(s.assetRevisions.id, previous.revisionId as string))).limit(1); if (!revision) throw notFound("asset_revision_not_found", "Asset revision was not found."); return { revision: assetRevisionRecord(revision), reused: true }; }
       const asset = await requireAsset(tx, identity, assetId);
       if (asset.currentRevisionId !== input.parentRevisionId) throw conflict("base_revision_changed", "The asset changed since this revision started.");
-      const effectiveStatus = input.rawStatus === "approved" ? "draft" : input.rawStatus; const id = randomUUID(); const now = new Date();
-      const [created] = await tx.insert(s.assetRevisions).values({ id, tenantId: identity.tenantId, assetId, parentRevisionId: input.parentRevisionId, manifestSchemaVersion: 3, rawStatus: input.rawStatus, effectiveStatus, contractHash: input.contractHash, manifest: input.manifest, manifestObjectKey: input.objectKeys.manifest, runtimeObjectKey: input.objectKeys.runtime, modelObjectKey: input.objectKeys.model, createdBy: identity.userId, createdAt: now }).returning();
+      const effectiveStatus = input.rawStatus === "approved" ? "draft" : input.rawStatus; const id = input.id; const now = new Date();
+      const [created] = await tx.insert(s.assetRevisions).values({ id, tenantId: identity.tenantId, assetId, parentRevisionId: input.parentRevisionId, manifestSchemaVersion: input.manifestSchemaVersion, runtimeAbiVersion: input.runtimeAbiVersion, rawStatus: input.rawStatus, effectiveStatus, contractHash: input.contractHash, artifactSetHash: input.artifactSetHash, packageRootKey: input.packageRootKey, packageIndexKey: input.packageIndexKey, packageIndexHash: input.packageIndexHash, createdBy: identity.userId, createdAt: now }).returning();
+      if (input.objects.length) await tx.insert(s.assetArtifacts).values(input.objects.map((object) => ({ tenantId: identity.tenantId, revisionId: id, kind: object.logicalPath.split("/", 1)[0], ...object })));
       await tx.update(s.assets).set({ currentRevisionId: id, updatedAt: now }).where(assetScope(identity, assetId));
       await writeIdempotency(tx, identity, scope, input.idempotencyKey, input, { revisionId: id }, 201);
       return { revision: assetRevisionRecord(created), reused: false };
@@ -148,12 +149,23 @@ export class PostgresControlPlaneRepository implements ControlPlaneRepository {
       if (!revision) throw notFound("asset_revision_not_found", "Asset revision was not found.");
       if (asset.currentRevisionId !== revisionId || revision.contractHash !== contractHash) throw conflict("base_revision_changed", "Approval does not match the current asset contract.");
       if (approved && revision.effectiveStatus !== "candidate") throw conflict("asset_not_candidate", "Only a technically ready candidate can be approved.");
-      const rawStatus = approved ? "approved" : "draft"; const effectiveStatus = rawStatus;
-      const [updated] = await tx.update(s.assetRevisions).set({ rawStatus, effectiveStatus }).where(eq(s.assetRevisions.id, revisionId)).returning();
+      const effectiveStatus = approved ? "approved" : "draft";
+      const [updated] = await tx.update(s.assetRevisions).set({ effectiveStatus }).where(eq(s.assetRevisions.id, revisionId)).returning();
+      if (approved) await tx.update(s.assets).set({ publishedRevisionId: revisionId, updatedAt: new Date() }).where(assetScope(identity, assetId));
       await tx.insert(s.assetReviews).values({ tenantId: identity.tenantId, assetId, revisionId, reviewerUserId: identity.userId, decision: approved ? "approved" : "rejected", contractHash });
       await writeIdempotency(tx, identity, scope, idempotencyKey, { revisionId, contractHash, approved }, { revisionId }, 200);
       return assetRevisionRecord(updated);
     });
+  }
+
+  async getPublishedAssets(identity: RequestIdentity): Promise<PublishedAssetRecord[]> {
+    const rows = await this.db.select().from(s.assets).innerJoin(s.assetRevisions, eq(s.assets.publishedRevisionId, s.assetRevisions.id)).where(and(eq(s.assets.tenantId, identity.tenantId), eq(s.assets.workspaceId, identity.workspaceId)));
+    return Promise.all(rows.map(async (row) => ({ asset: assetRecord(row.assets), revision: { ...assetRevisionRecord(row.asset_revisions), effectiveStatus: "approved" }, objects: await this.db.select({ logicalPath: s.assetArtifacts.logicalPath, objectKey: s.assetArtifacts.objectKey, sha256: s.assetArtifacts.sha256, sizeBytes: s.assetArtifacts.sizeBytes, mediaType: s.assetArtifacts.mediaType }).from(s.assetArtifacts).where(eq(s.assetArtifacts.revisionId, row.asset_revisions.id)) })));
+  }
+
+  async setAssetExecutionPolicy(identity: RequestIdentity, assetId: string, policy: AssetRecord["executionPolicy"]) {
+    const [updated] = await this.db.update(s.assets).set({ executionPolicy: policy, updatedAt: new Date() }).where(assetScope(identity, assetId)).returning();
+    if (!updated) throw notFound("asset_not_found", "Asset was not found."); return assetRecord(updated);
   }
 
   async createAgentRun(identity: RequestIdentity, input: { intent: AgentRunIntent; message: string; conversationId?: string; baseRevisionId?: string; idempotencyKey: string }) {
@@ -204,8 +216,8 @@ async function writeIdempotency(db: any, identity: RequestIdentity, scope: strin
 
 function layoutRecord(row: typeof s.layouts.$inferSelect): LayoutRecord { return { id: row.id, tenantId: row.tenantId, workspaceId: row.workspaceId, ownerUserId: row.ownerUserId, name: row.name, currentVersionId: row.currentVersionId!, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
 function layoutVersionRecord(row: typeof s.layoutVersions.$inferSelect): LayoutVersionRecord { return { id: row.id, layoutId: row.layoutId, parentVersionId: row.parentVersionId, objectKey: row.objectKey, sha256: row.sha256, source: row.source, createdAt: row.createdAt.toISOString() }; }
-function assetRecord(row: typeof s.assets.$inferSelect): AssetRecord { return { id: row.id, tenantId: row.tenantId, workspaceId: row.workspaceId, ownerUserId: row.ownerUserId, name: row.name, category: row.category, assetScope: row.scope, lifecyclePolicy: row.lifecyclePolicy, currentRevisionId: row.currentRevisionId, createdAt: row.createdAt.toISOString() }; }
-function assetRevisionRecord(row: typeof s.assetRevisions.$inferSelect): AssetRevisionRecord { return { id: row.id, assetId: row.assetId, parentRevisionId: row.parentRevisionId, manifest: row.manifest as Record<string, unknown>, contractHash: row.contractHash, rawStatus: row.rawStatus, effectiveStatus: row.effectiveStatus, objectKeys: { manifest: row.manifestObjectKey, runtime: row.runtimeObjectKey, model: row.modelObjectKey }, createdAt: row.createdAt.toISOString() }; }
+function assetRecord(row: typeof s.assets.$inferSelect): AssetRecord { return { id: row.id, tenantId: row.tenantId, workspaceId: row.workspaceId, ownerUserId: row.ownerUserId, assetKey: row.assetKey, name: row.name, category: row.category, assetScope: row.scope, lifecyclePolicy: row.lifecyclePolicy, executionPolicy: row.executionPolicy, currentRevisionId: row.currentRevisionId, publishedRevisionId: row.publishedRevisionId, createdAt: row.createdAt.toISOString() }; }
+function assetRevisionRecord(row: typeof s.assetRevisions.$inferSelect): AssetRevisionRecord { return { id: row.id, assetId: row.assetId, parentRevisionId: row.parentRevisionId, contractHash: row.contractHash, artifactSetHash: row.artifactSetHash, packageRootKey: row.packageRootKey, packageIndexKey: row.packageIndexKey, packageIndexHash: row.packageIndexHash, manifestSchemaVersion: row.manifestSchemaVersion as 3, runtimeAbiVersion: row.runtimeAbiVersion as 1, rawStatus: row.rawStatus, effectiveStatus: row.effectiveStatus, createdAt: row.createdAt.toISOString() }; }
 function agentRunDto(row: typeof s.agentRuns.$inferSelect): AgentRunDto { return { id: row.id, conversationId: row.threadId, intent: row.intent as AgentRunIntent, status: row.status, baseRevisionId: row.baseRevisionId, resultRevisionId: row.resultRevisionId, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), heartbeatAt: row.heartbeatAt?.toISOString() ?? null, failureSummary: row.failureSummary }; }
 function conflict(code: string, message: string) { return Object.assign(new Error(message), { statusCode: 409, code }); }
 function notFound(code: string, message: string) { return Object.assign(new Error(message), { statusCode: 404, code }); }

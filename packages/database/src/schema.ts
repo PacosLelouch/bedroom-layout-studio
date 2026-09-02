@@ -22,6 +22,7 @@ const timestamps = {
 export const assetStatus = pgEnum("asset_status", ["draft", "candidate", "approved", "archived"]);
 export const assetScope = pgEnum("asset_scope", ["builtin", "user-generated"]);
 export const lifecyclePolicy = pgEnum("lifecycle_policy", ["repository-trusted", "user-reviewed"]);
+export const assetExecutionPolicy = pgEnum("asset_execution_policy", ["repository-bundled", "platform-built-esm", "quarantined-source"]);
 export const agentRunStatus = pgEnum("agent_run_status", ["queued", "preparing", "running", "awaiting_user", "awaiting_approval", "validating", "succeeded", "failed", "cancelled", "timed_out"]);
 export const agentRequestKind = pgEnum("agent_request_kind", ["user_input", "approval"]);
 export const agentRequestStatus = pgEnum("agent_request_status", ["pending", "resolved", "expired", "cancelled"]);
@@ -104,14 +105,16 @@ export const assets = pgTable("assets", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
-  slug: text("slug").notNull(),
+  assetKey: text("asset_key").notNull(),
   name: text("name").notNull(),
   category: text("category").notNull(),
   scope: assetScope("scope").notNull(),
   lifecyclePolicy: lifecyclePolicy("lifecycle_policy").notNull(),
+  executionPolicy: assetExecutionPolicy("execution_policy").notNull(),
   currentRevisionId: uuid("current_revision_id"),
+  publishedRevisionId: uuid("published_revision_id"),
   ...timestamps,
-}, (table) => [uniqueIndex("assets_workspace_slug_uq").on(table.workspaceId, table.slug)]);
+}, (table) => [uniqueIndex("assets_workspace_key_uq").on(table.workspaceId, table.assetKey)]);
 
 export const assetRevisions = pgTable("asset_revisions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -119,16 +122,14 @@ export const assetRevisions = pgTable("asset_revisions", {
   assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
   parentRevisionId: uuid("parent_revision_id"),
   manifestSchemaVersion: integer("manifest_schema_version").notNull().default(3),
+  runtimeAbiVersion: integer("runtime_abi_version").notNull().default(1),
   rawStatus: assetStatus("raw_status").notNull(),
   effectiveStatus: assetStatus("effective_status").notNull(),
   contractHash: text("contract_hash").notNull(),
-  manifest: jsonb("manifest").notNull(),
-  manifestObjectId: uuid("manifest_object_id").references(() => storageObjects.id, { onDelete: "restrict" }),
-  runtimeObjectId: uuid("runtime_object_id").references(() => storageObjects.id, { onDelete: "restrict" }),
-  modelObjectId: uuid("model_object_id").references(() => storageObjects.id, { onDelete: "restrict" }),
-  manifestObjectKey: text("manifest_object_key").notNull(),
-  runtimeObjectKey: text("runtime_object_key").notNull(),
-  modelObjectKey: text("model_object_key"),
+  artifactSetHash: text("artifact_set_hash").notNull(),
+  packageRootKey: text("package_root_key").notNull(),
+  packageIndexKey: text("package_index_key").notNull(),
+  packageIndexHash: text("package_index_hash").notNull(),
   sourceAgentRunId: uuid("source_agent_run_id"),
   immutable: boolean("immutable").notNull().default(true),
   createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
@@ -139,11 +140,16 @@ export const assetArtifacts = pgTable("asset_artifacts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   revisionId: uuid("revision_id").notNull().references(() => assetRevisions.id, { onDelete: "cascade" }),
-  objectId: uuid("object_id").notNull().references(() => storageObjects.id, { onDelete: "restrict" }),
+  objectId: uuid("object_id").references(() => storageObjects.id, { onDelete: "restrict" }),
+  logicalPath: text("logical_path").notNull(),
+  objectKey: text("object_key").notNull(),
+  sha256: text("sha256").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  mediaType: text("media_type").notNull(),
   kind: text("kind").notNull(),
   metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [index("asset_artifacts_revision_idx").on(table.revisionId, table.kind)]);
+}, (table) => [index("asset_artifacts_revision_idx").on(table.revisionId, table.kind), uniqueIndex("asset_artifacts_revision_path_uq").on(table.revisionId, table.logicalPath)]);
 
 export const assetReviews = pgTable("asset_reviews", {
   id: uuid("id").primaryKey().defaultRandom(),

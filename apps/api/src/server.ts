@@ -12,9 +12,11 @@ import {
   postAgentMessageRequestSchema,
   resolveAgentRequestSchema,
   terminalAgentRunStatuses,
+  furniturePackageIndexSchema,
 } from "@bedroom/contracts";
 import type { ObjectStorage } from "@bedroom/storage";
 import { furnitureCandidateReadinessIssues, validateFurnitureAssetManifest } from "@bedroom/furniture-assets";
+import { computeFurnitureArtifactSetHash, validateFurniturePackageKeyBoundary } from "@bedroom/furniture-assets/package-core";
 import { publicAgentEventSchema, publicAgentEventTypeSchema, agentRunStatusSchema } from "@bedroom/contracts";
 import { z } from "zod";
 import { createIdentityResolver } from "./auth.js";
@@ -74,6 +76,12 @@ export async function createApiServer(dependencies: ApiDependencies) {
     const event = await dependencies.repository.appendAgentEvent(input.identity, request.params.runId, input.event.type, input.event.payload as never);
     return { accepted: true, sequence: event.sequence };
   });
+  app.post<{ Params: { assetId: string } }>("/internal/v1/assets/:assetId/execution-policy", async (request) => {
+    const input = z.object({ identity: z.object({ userId: z.string().uuid(), tenantId: z.string().uuid(), workspaceId: z.string().uuid(), subject: z.string().min(1) }).strict(), policy: z.enum(["repository-bundled", "platform-built-esm", "quarantined-source"]), validation: z.object({ revisionId: z.string().uuid(), artifactSetHash: z.string().regex(/^[a-f0-9]{64}$/), runtimeAbiVersion: z.literal(1) }).strict() }).strict().parse(request.body);
+    const revision = (await dependencies.repository.listAssetRevisions(input.identity, request.params.assetId)).find((candidate) => candidate.id === input.validation.revisionId);
+    if (!revision || revision.artifactSetHash !== input.validation.artifactSetHash || revision.runtimeAbiVersion !== input.validation.runtimeAbiVersion) throw Object.assign(new Error("Execution policy promotion must match a validated immutable revision."), { statusCode: 409, code: "runtime_validation_stale" });
+    return dependencies.repository.setAssetExecutionPolicy(input.identity, request.params.assetId, input.policy);
+  });
 
   app.get("/api/v1/layouts", async (request) => dependencies.repository.listLayouts(request.identity));
   app.post("/api/v1/layouts", async (request, reply) => {
@@ -100,26 +108,56 @@ export async function createApiServer(dependencies: ApiDependencies) {
   });
 
   app.get("/api/v1/assets", async (request) => dependencies.repository.listAssets(request.identity));
+  app.get("/api/v1/furniture-catalog", async (request) => {
+    const published = await dependencies.repository.getPublishedAssets(request.identity);
+    return Promise.all(published.filter(({ asset }) => asset.executionPolicy !== "quarantined-source").map(async ({ asset, revision, objects }) => {
+      const manifestObject = objects.find((object) => object.logicalPath === "contract/asset.json")!;
+      const manifest = JSON.parse(new TextDecoder().decode(await dependencies.storage.get(manifestObject.objectKey)));
+      const deliveryUrl = async (object: typeof objects[number]) => {
+        const signed = await dependencies.storage.createSignedGetUrl(object.objectKey, 24 * 60 * 60);
+        return signed.startsWith("file://") ? `${dependencies.config.publicBaseUrl}/api/v1/assets/${asset.id}/revisions/${revision.id}/objects/${object.logicalPath.split("/").map(encodeURIComponent).join("/")}?sha256=${object.sha256}` : signed;
+      };
+      const runtimeObject = objects.find((object) => object.logicalPath === "runtime/runtime.mjs")!;
+      const resourceObjects = objects.filter((object) => object.logicalPath.startsWith("runtime/resources/"));
+      return { assetId: asset.id, assetKey: asset.assetKey, revisionId: revision.id, contractHash: revision.contractHash, artifactSetHash: revision.artifactSetHash, runtimeAbiVersion: revision.runtimeAbiVersion, manifest, runtimeUrl: await deliveryUrl(runtimeObject), resources: Object.fromEntries(await Promise.all(resourceObjects.map(async (object) => [object.logicalPath.slice("runtime/resources/".length), await deliveryUrl(object)]))) };
+    }));
+  });
+  app.get<{ Params: { assetId: string; revisionId: string; "*": string } }>("/api/v1/assets/:assetId/revisions/:revisionId/objects/*", async (request, reply) => {
+    const published = (await dependencies.repository.getPublishedAssets(request.identity)).find(({ asset, revision }) => asset.id === request.params.assetId && revision.id === request.params.revisionId);
+    const object = published?.objects.find((candidate) => candidate.logicalPath === request.params["*"]);
+    if (!object) throw Object.assign(new Error("Published asset object was not found."), { statusCode: 404, code: "asset_object_not_found" });
+    return reply.header("cache-control", "public, max-age=31536000, immutable").header("x-content-type-options", "nosniff").type(object.mediaType).send(Buffer.from(await dependencies.storage.get(object.objectKey)));
+  });
   app.post("/api/v1/assets", async (request, reply) => {
-    const input = createAssetRequestSchema.parse(request.body); const result = await dependencies.repository.createAsset(request.identity, input);
+    const input = createAssetRequestSchema.parse(request.body); const result = await dependencies.repository.createAsset(request.identity, { ...input, executionPolicy: "quarantined-source" });
     return reply.status(result.reused ? 200 : 201).send({ ...result.asset, reused: result.reused });
   });
   app.get<{ Params: { assetId: string } }>("/api/v1/assets/:assetId/revisions", async (request) => dependencies.repository.listAssetRevisions(request.identity, request.params.assetId));
   app.post<{ Params: { assetId: string } }>("/api/v1/assets/:assetId/revisions", async (request, reply) => {
     const input = createAssetRevisionRequestSchema.parse(request.body);
     if (input.rawStatus === "approved") throw Object.assign(new Error("A revision must pass candidate review before it can be approved."), { statusCode: 400, code: "approval_required" });
-    const issues = input.rawStatus === "candidate"
-      ? furnitureCandidateReadinessIssues(input.manifest, input.contractHash)
-      : validateFurnitureAssetManifest(input.manifest);
-    if (input.manifest.status !== input.rawStatus) issues.push("manifest status must match rawStatus");
-    if (issues.length) throw Object.assign(new Error("The furniture manifest does not satisfy the v3 contract."), { statusCode: 400, code: "invalid_furniture_manifest", issues });
-    const tenantAssetPrefix = `tenants/${request.identity.tenantId}/assets/${request.params.assetId}/`;
-    for (const key of Object.values(input.objectKeys).filter((value): value is string => Boolean(value))) {
-      if (!key.startsWith(tenantAssetPrefix) || !(await dependencies.storage.head(key))) {
-        throw Object.assign(new Error("Every artifact must already exist under this tenant asset prefix."), { statusCode: 400, code: "invalid_artifact_reference" });
-      }
+    const asset = (await dependencies.repository.listAssets(request.identity)).find((candidate) => candidate.id === request.params.assetId);
+    if (!asset) throw Object.assign(new Error("Asset was not found."), { statusCode: 404, code: "asset_not_found" });
+    if (input.rawStatus === "candidate" && asset.executionPolicy === "quarantined-source") throw Object.assign(new Error("Quarantined source must be built and validated by the platform before candidacy."), { statusCode: 400, code: "runtime_not_admissible" });
+    const expectedRoot = `tenants/${request.identity.tenantId}/assets/${request.params.assetId}/revisions/${input.revisionId}`;
+    if (input.packageRootKey !== expectedRoot || input.packageIndexKey !== `${expectedRoot}/package-index.json`) throw Object.assign(new Error("Package keys do not identify this exact tenant asset revision."), { statusCode: 400, code: "invalid_package_boundary" });
+    const indexBytes = await dependencies.storage.get(input.packageIndexKey).catch(() => null);
+    if (!indexBytes || sha256(indexBytes) !== input.packageIndexHash) throw Object.assign(new Error("Package index is missing or its hash does not match."), { statusCode: 400, code: "invalid_package_index" });
+    const index = furniturePackageIndexSchema.parse(JSON.parse(new TextDecoder().decode(indexBytes)));
+    const packageIssues = validateFurniturePackageKeyBoundary(index, expectedRoot);
+    if (index.assetKey !== asset.assetKey || index.revisionId !== input.revisionId || index.contractHash !== input.contractHash || index.artifactSetHash !== input.artifactSetHash || computeFurnitureArtifactSetHash(index.objects) !== input.artifactSetHash) packageIssues.push("package-index identity or hashes do not match the revision request");
+    for (const object of index.objects) {
+      const stored = await dependencies.storage.head(object.objectKey);
+      if (!stored || stored.sha256 !== object.sha256 || stored.size !== object.sizeBytes || stored.mediaType !== object.mediaType) packageIssues.push(`${object.logicalPath} is missing or does not match its immutable metadata`);
     }
-    const result = await dependencies.repository.createAssetRevision(request.identity, request.params.assetId, input);
+    if (packageIssues.length) throw Object.assign(new Error("The furniture package is incomplete or crosses its revision boundary."), { statusCode: 400, code: "invalid_furniture_package", issues: packageIssues });
+    const manifestObject = index.objects.find((object) => object.logicalPath === index.entrypoints.manifest)!;
+    const manifest = JSON.parse(new TextDecoder().decode(await dependencies.storage.get(manifestObject.objectKey)));
+    const issues = input.rawStatus === "candidate" ? furnitureCandidateReadinessIssues(manifest, input.contractHash) : validateFurnitureAssetManifest(manifest);
+    if (manifest.id !== asset.assetKey || manifest.status !== input.rawStatus) issues.push("manifest id/status must match assetKey/rawStatus");
+    if (issues.length) throw Object.assign(new Error("The furniture manifest does not satisfy the v3 contract."), { statusCode: 400, code: "invalid_furniture_manifest", issues });
+    const { revisionId, ...revisionInput } = input;
+    const result = await dependencies.repository.createAssetRevision(request.identity, request.params.assetId, { ...revisionInput, id: revisionId, objects: index.objects });
     return reply.status(result.reused ? 200 : 201).send({ ...result.revision, reused: result.reused });
   });
   app.post<{ Params: { assetId: string } }>("/api/v1/assets/:assetId/approve", async (request) => {

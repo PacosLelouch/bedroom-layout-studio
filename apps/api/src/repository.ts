@@ -26,6 +26,7 @@ export interface LayoutVersionRecord {
 
 export interface AssetRecord {
   id: string;
+  assetKey: string;
   tenantId: string;
   workspaceId: string;
   ownerUserId: string;
@@ -33,7 +34,9 @@ export interface AssetRecord {
   category: string;
   assetScope: "builtin" | "user-generated";
   lifecyclePolicy: "repository-trusted" | "user-reviewed";
+  executionPolicy: "repository-bundled" | "platform-built-esm" | "quarantined-source";
   currentRevisionId: string | null;
+  publishedRevisionId: string | null;
   createdAt: string;
 }
 
@@ -41,13 +44,21 @@ export interface AssetRevisionRecord {
   id: string;
   assetId: string;
   parentRevisionId: string | null;
-  manifest: Record<string, unknown>;
   contractHash: string;
+  artifactSetHash: string;
+  packageRootKey: string;
+  packageIndexKey: string;
+  packageIndexHash: string;
+  manifestSchemaVersion: 3;
+  runtimeAbiVersion: 1;
   rawStatus: "draft" | "candidate" | "approved" | "archived";
   effectiveStatus: "draft" | "candidate" | "approved" | "archived";
-  objectKeys: { manifest: string; runtime: string; model: string | null };
   createdAt: string;
 }
+
+export interface AssetPackageObjectRecord { logicalPath: string; objectKey: string; sha256: string; sizeBytes: number; mediaType: string; }
+export interface PublishedAssetRecord { asset: AssetRecord; revision: AssetRevisionRecord; objects: AssetPackageObjectRecord[]; }
+export type CreateAssetRevisionInput = Omit<AssetRevisionRecord, "assetId" | "effectiveStatus" | "createdAt"> & { objects: AssetPackageObjectRecord[]; idempotencyKey: string };
 
 interface AgentRunRecord extends AgentRunDto {
   tenantId: string;
@@ -64,9 +75,11 @@ export interface ControlPlaneRepository {
   createLayoutVersion(identity: RequestIdentity, layoutId: string, input: { versionId?: string; parentVersionId: string; objectKey: string; sha256: string; idempotencyKey: string }): Promise<{ layout: LayoutRecord; version: LayoutVersionRecord; reused: boolean }>;
   copyLayout(identity: RequestIdentity, layoutId: string, input: { sourceVersionId: string; name: string; idempotencyKey: string }): Promise<{ layout: LayoutRecord; version: LayoutVersionRecord; reused: boolean }>;
   listAssets(identity: RequestIdentity): Promise<AssetRecord[]>;
-  createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "createdAt"> & { idempotencyKey: string }): Promise<{ asset: AssetRecord; reused: boolean }>;
+  createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "publishedRevisionId" | "createdAt"> & { idempotencyKey: string }): Promise<{ asset: AssetRecord; reused: boolean }>;
   listAssetRevisions(identity: RequestIdentity, assetId: string): Promise<AssetRevisionRecord[]>;
-  createAssetRevision(identity: RequestIdentity, assetId: string, input: Omit<AssetRevisionRecord, "id" | "assetId" | "effectiveStatus" | "createdAt"> & { idempotencyKey: string }): Promise<{ revision: AssetRevisionRecord; reused: boolean }>;
+  createAssetRevision(identity: RequestIdentity, assetId: string, input: CreateAssetRevisionInput): Promise<{ revision: AssetRevisionRecord; reused: boolean }>;
+  getPublishedAssets(identity: RequestIdentity): Promise<PublishedAssetRecord[]>;
+  setAssetExecutionPolicy(identity: RequestIdentity, assetId: string, policy: AssetRecord["executionPolicy"]): Promise<AssetRecord>;
   approveAsset(identity: RequestIdentity, assetId: string, revisionId: string, contractHash: string, approved: boolean, idempotencyKey: string): Promise<AssetRevisionRecord>;
   createAgentRun(identity: RequestIdentity, input: { intent: AgentRunIntent; message: string; conversationId?: string; baseRevisionId?: string; idempotencyKey: string }): Promise<{ run: AgentRunDto; reused: boolean }>;
   getAgentRun(identity: RequestIdentity, runId: string): Promise<AgentRunDto | null>;
@@ -81,6 +94,7 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
   readonly #versions = new Map<string, LayoutVersionRecord>();
   readonly #assets = new Map<string, AssetRecord>();
   readonly #revisions = new Map<string, AssetRevisionRecord>();
+  readonly #artifacts = new Map<string, AssetPackageObjectRecord[]>();
   readonly #runs = new Map<string, AgentRunRecord>();
   readonly #events = new Map<string, PublicAgentEvent[]>();
   readonly #idempotency = new Map<string, unknown>();
@@ -133,11 +147,11 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
 
   async listAssets(identity: RequestIdentity) { return [...this.#assets.values()].filter((asset) => owns(asset, identity)); }
 
-  async createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "createdAt"> & { idempotencyKey: string }) {
+  async createAsset(identity: RequestIdentity, input: Omit<AssetRecord, "id" | "tenantId" | "workspaceId" | "ownerUserId" | "currentRevisionId" | "publishedRevisionId" | "createdAt"> & { idempotencyKey: string }) {
     const key = idem(identity, "asset:create", input.idempotencyKey);
     const previous = this.#idempotency.get(key) as AssetRecord | undefined;
     if (previous) return { asset: previous, reused: true };
-    const asset: AssetRecord = { id: randomUUID(), tenantId: identity.tenantId, workspaceId: identity.workspaceId, ownerUserId: identity.userId, name: input.name, category: input.category, assetScope: input.assetScope, lifecyclePolicy: input.lifecyclePolicy, currentRevisionId: null, createdAt: new Date().toISOString() };
+    const asset: AssetRecord = { id: randomUUID(), tenantId: identity.tenantId, workspaceId: identity.workspaceId, ownerUserId: identity.userId, assetKey: input.assetKey, name: input.name, category: input.category, assetScope: input.assetScope, lifecyclePolicy: input.lifecyclePolicy, executionPolicy: input.executionPolicy, currentRevisionId: null, publishedRevisionId: null, createdAt: new Date().toISOString() };
     this.#assets.set(asset.id, asset); this.#idempotency.set(key, asset);
     return { asset, reused: false };
   }
@@ -147,15 +161,15 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     return [...this.#revisions.values()].filter((revision) => revision.assetId === assetId);
   }
 
-  async createAssetRevision(identity: RequestIdentity, assetId: string, input: Omit<AssetRevisionRecord, "id" | "assetId" | "effectiveStatus" | "createdAt"> & { idempotencyKey: string }) {
+  async createAssetRevision(identity: RequestIdentity, assetId: string, input: CreateAssetRevisionInput) {
     const asset = this.#asset(identity, assetId);
     const key = idem(identity, `asset:${assetId}:revision`, input.idempotencyKey);
     const previous = this.#idempotency.get(key) as AssetRevisionRecord | undefined;
     if (previous) return { revision: previous, reused: true };
     if (asset.currentRevisionId !== input.parentRevisionId) throw conflict("base_revision_changed", "The asset changed since this revision started.");
     const effectiveStatus = input.rawStatus === "approved" ? "draft" : input.rawStatus;
-    const revision: AssetRevisionRecord = { id: randomUUID(), assetId, parentRevisionId: input.parentRevisionId, manifest: input.manifest, contractHash: input.contractHash, rawStatus: input.rawStatus, effectiveStatus, objectKeys: input.objectKeys, createdAt: new Date().toISOString() };
-    this.#revisions.set(revision.id, revision); this.#assets.set(assetId, { ...asset, currentRevisionId: revision.id }); this.#idempotency.set(key, revision);
+    const revision: AssetRevisionRecord = { id: input.id, assetId, parentRevisionId: input.parentRevisionId, contractHash: input.contractHash, artifactSetHash: input.artifactSetHash, packageRootKey: input.packageRootKey, packageIndexKey: input.packageIndexKey, packageIndexHash: input.packageIndexHash, manifestSchemaVersion: input.manifestSchemaVersion, runtimeAbiVersion: input.runtimeAbiVersion, rawStatus: input.rawStatus, effectiveStatus, createdAt: new Date().toISOString() };
+    this.#revisions.set(revision.id, revision); this.#artifacts.set(revision.id, input.objects); this.#assets.set(assetId, { ...asset, currentRevisionId: revision.id }); this.#idempotency.set(key, revision);
     return { revision, reused: false };
   }
 
@@ -168,8 +182,19 @@ export class MemoryControlPlaneRepository implements ControlPlaneRepository {
     if (!revision || revision.assetId !== asset.id) throw notFound("asset_revision_not_found", "Asset revision was not found.");
     if (asset.currentRevisionId !== revisionId || revision.contractHash !== contractHash) throw conflict("base_revision_changed", "Approval does not match the current asset contract.");
     if (approved && revision.effectiveStatus !== "candidate") throw conflict("asset_not_candidate", "Only a technically ready candidate can be approved.");
-    const updated: AssetRevisionRecord = { ...revision, rawStatus: approved ? "approved" : "draft", effectiveStatus: approved ? "approved" : "draft" };
-    this.#revisions.set(revisionId, updated); this.#idempotency.set(key, updated); return updated;
+    const updated: AssetRevisionRecord = { ...revision, effectiveStatus: approved ? "approved" : "draft" };
+    this.#revisions.set(revisionId, updated); this.#assets.set(assetId, { ...asset, publishedRevisionId: approved ? revisionId : asset.publishedRevisionId }); this.#idempotency.set(key, updated); return updated;
+  }
+
+  async getPublishedAssets(identity: RequestIdentity) {
+    return [...this.#assets.values()].filter((asset) => owns(asset, identity) && asset.publishedRevisionId).flatMap((asset) => {
+      const revision = this.#revisions.get(asset.publishedRevisionId!);
+      return revision ? [{ asset, revision: { ...revision, effectiveStatus: "approved" as const }, objects: this.#artifacts.get(revision.id) ?? [] }] : [];
+    });
+  }
+
+  async setAssetExecutionPolicy(identity: RequestIdentity, assetId: string, policy: AssetRecord["executionPolicy"]) {
+    const asset = this.#asset(identity, assetId); const updated = { ...asset, executionPolicy: policy }; this.#assets.set(assetId, updated); return updated;
   }
 
   async createAgentRun(identity: RequestIdentity, input: { intent: AgentRunIntent; message: string; conversationId?: string; baseRevisionId?: string; idempotencyKey: string }) {

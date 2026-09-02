@@ -9,6 +9,7 @@
     "./api": "./src/api.ts",
     "./bedroom": "./src/bedroom.ts",
     "./furniture": "./src/furniture.ts",
+    "./furniture-package": "./src/furniture-package.ts",
     "./layout": "./src/layout.ts"
   },
   "scripts": {

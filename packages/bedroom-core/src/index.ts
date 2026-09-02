@@ -4,6 +4,7 @@ import type {
   CreateAgentRunResponse,
   LayoutSnapshot,
   PublicAgentEvent,
+  PublishedFurnitureCatalogEntry,
 } from "@bedroom/contracts";
 import { publicAgentEventSchema } from "@bedroom/contracts";
 
@@ -70,6 +71,10 @@ export class BedroomApiClient {
 
   listLayouts(): Promise<Array<{ id: string; name: string; currentVersionId: string }>> {
     return this.#request("/api/v1/layouts");
+  }
+
+  listFurnitureCatalog(): Promise<PublishedFurnitureCatalogEntry[]> {
+    return this.#request("/api/v1/furniture-catalog");
   }
 
   createLayout(name: string, snapshot: LayoutSnapshot, idempotencyKey: string) {

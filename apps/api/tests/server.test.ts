@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +9,7 @@ import { loadApiConfig } from "../src/config.js";
 import { MemoryAgentJobPublisher } from "../src/queue.js";
 import { MemoryControlPlaneRepository } from "../src/repository.js";
 import { createApiServer } from "../src/server.js";
+import { computeFurnitureArtifactSetHash } from "@bedroom/furniture-assets/package-core";
 
 const snapshot = {
   schemaVersion: 2 as const,
@@ -31,8 +33,9 @@ async function fixture() {
   const config = loadApiConfig({ NODE_ENV: "test", STORAGE_ROOT: root });
   const repository = new MemoryControlPlaneRepository();
   const publisher = new MemoryAgentJobPublisher();
-  const app = await createApiServer({ config, repository, publisher, storage: new FilesystemObjectStorage(root) });
-  return { app, publisher, root };
+  const storage = new FilesystemObjectStorage(root);
+  const app = await createApiServer({ config, repository, publisher, storage });
+  return { app, publisher, root, storage };
 }
 
 test("creates immutable layout versions and reuses an idempotent request", async () => {
@@ -51,6 +54,25 @@ test("creates immutable layout versions and reuses an idempotent request", async
   } finally {
     await app.close(); await rm(root, { recursive: true, force: true });
   }
+});
+
+test("registers an asset revision from immutable package keys without storing manifest content", async () => {
+  const { app, root, storage } = await fixture();
+  try {
+    const createdAsset = await app.inject({ method: "POST", url: "/api/v1/assets", payload: { assetKey: "test-chair", name: "Test Chair", category: "seat", assetScope: "user-generated", lifecyclePolicy: "user-reviewed", idempotencyKey: "asset-create-001" } });
+    assert.equal(createdAsset.statusCode, 201);
+    const assetId = createdAsset.json().id as string; const revisionId = randomUUID();
+    const prefix = `tenants/00000000-0000-4000-8000-000000000002/assets/${assetId}/revisions/${revisionId}`;
+    const manifest = { schemaVersion: 3, assetScope: "user-generated", id: "test-chair", name: "Test Chair", category: "seat", status: "draft", origin: { method: "manual-procedural" }, lifecyclePolicy: "user-reviewed", appearance: { defaultColor: "#887766" }, dimensions: null, defaultConfiguration: null, parameterDefinitions: [], states: [], components: [], capabilityBindings: [], validationConfigurations: [], designOverrides: [], candidateEvidence: null, runtimeEvidence: null, footprintPolicy: { type: "configuration-dimensions" }, clearancePolicy: { type: "none" }, exportCapabilities: { formats: ["glb"], materialPolicy: "portable-pbr", preserveComponentNodes: true }, exportReady: false, exportIssue: "draft", exportEvidence: null, dimensionSource: null, qualityEvidence: [], reviewViews: [], referenceImage: null, approvedFactoryHash: null, reviewedAt: null };
+    const manifestBytes = new TextEncoder().encode(`${JSON.stringify(manifest)}\n`); const runtimeBytes = new TextEncoder().encode("export const runtimeAbiVersion=1; export function createFurnitureModel(){}\n");
+    const storedManifest = await storage.putImmutable(`${prefix}/contract/asset.json`, manifestBytes, "application/json"); const storedRuntime = await storage.putImmutable(`${prefix}/runtime/runtime.mjs`, runtimeBytes, "text/javascript; charset=utf-8");
+    const objects = [{ logicalPath: "contract/asset.json", objectKey: storedManifest.key, sha256: storedManifest.sha256, sizeBytes: storedManifest.size, mediaType: storedManifest.mediaType }, { logicalPath: "runtime/runtime.mjs", objectKey: storedRuntime.key, sha256: storedRuntime.sha256, sizeBytes: storedRuntime.size, mediaType: storedRuntime.mediaType }];
+    const contractHash = "a".repeat(64); const artifactSetHash = computeFurnitureArtifactSetHash(objects);
+    const index = { schemaVersion: 1, assetKey: "test-chair", revisionId, contractHash, artifactSetHash, runtimeAbiVersion: 1, entrypoints: { manifest: "contract/asset.json", runtime: "runtime/runtime.mjs" }, objects };
+    const indexBytes = new TextEncoder().encode(`${JSON.stringify(index)}\n`); const storedIndex = await storage.putImmutable(`${prefix}/package-index.json`, indexBytes, "application/json");
+    const response = await app.inject({ method: "POST", url: `/api/v1/assets/${assetId}/revisions`, payload: { parentRevisionId: null, revisionId, packageRootKey: prefix, packageIndexKey: storedIndex.key, packageIndexHash: storedIndex.sha256, contractHash, artifactSetHash, manifestSchemaVersion: 3, runtimeAbiVersion: 1, rawStatus: "draft", idempotencyKey: "asset-revision-001" } });
+    assert.equal(response.statusCode, 201, response.body); assert.equal(response.json().packageIndexKey, storedIndex.key); assert.equal("manifest" in response.json(), false);
+  } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
 
 test("queues one Agent run for repeated idempotent creation", async () => {

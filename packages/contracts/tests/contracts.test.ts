@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAgentRunRequestSchema, parseLayoutSnapshot } from "../src/index.js";
+import { createAgentRunRequestSchema, furniturePackageIndexSchema, parseLayoutSnapshot } from "../src/index.js";
 
 test("requires idempotency for Agent creation", () => {
   assert.throws(() => createAgentRunRequestSchema.parse({ intent: "general-message", message: "hello" }));
+});
+
+test("validates a closed furniture package index", () => {
+  const hash = "a".repeat(64);
+  const revisionId = "00000000-0000-4000-8000-000000000001";
+  const prefix = `tenants/t/assets/a/revisions/${revisionId}`;
+  const value = furniturePackageIndexSchema.parse({ schemaVersion: 1, assetKey: "nightstand", revisionId, contractHash: "a".repeat(64), artifactSetHash: "b".repeat(64), runtimeAbiVersion: 1, entrypoints: { manifest: "contract/asset.json", runtime: "runtime/runtime.mjs" }, objects: [
+    { logicalPath: "contract/asset.json", objectKey: `${prefix}/contract/asset.json`, sha256: hash, sizeBytes: 10, mediaType: "application/json" },
+    { logicalPath: "runtime/runtime.mjs", objectKey: `${prefix}/runtime/runtime.mjs`, sha256: hash, sizeBytes: 20, mediaType: "text/javascript" },
+  ] });
+  assert.equal(value.objects.length, 2);
 });
 
 test("migrates a valid version-one layout snapshot", () => {
