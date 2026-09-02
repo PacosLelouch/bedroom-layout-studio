@@ -4,7 +4,7 @@
   "id": "crown-chest",
   "name": "皇冠收纳箱",
   "category": "storage",
-  "status": "draft",
+  "status": "candidate",
   "origin": {
     "method": "img2threejs",
     "sourceUrl": "https://github.com/img2threejs/img2threejs-showcase/blob/main/src/demos/crown-chest/createCrownChestModel.ts",
@@ -15,25 +15,126 @@
     "defaultColor": "#265e9d"
   },
   "referenceImage": "/generated-assets/crown-chest/reference.png",
-  "dimensions": null,
-  "defaultConfiguration": null,
+  "dimensions": {
+    "width": 600,
+    "depth": 520,
+    "height": 500
+  },
+  "defaultConfiguration": {
+    "dimensions": {
+      "width": 600,
+      "depth": 520,
+      "height": 500
+    },
+    "parameters": {},
+    "stateId": "closed"
+  },
   "parameterDefinitions": [],
   "states": [
-    { "id": "closed", "label": "关闭" },
-    { "id": "open", "label": "打开" }
+    {
+      "id": "closed",
+      "label": "关闭"
+    },
+    {
+      "id": "open",
+      "label": "打开"
+    }
   ],
   "components": [
-    { "id": "body", "label": "箱体", "nodeNames": ["body"], "movable": false },
-    { "id": "lid", "label": "箱盖", "nodeNames": ["lid-hinge", "lid"], "movable": true, "pivotNode": "lid-hinge" },
-    { "id": "frontLatch", "label": "前锁扣", "nodeNames": ["front-latch"], "movable": false },
-    { "id": "sideHandle", "label": "侧把手", "nodeNames": ["side-handle"], "movable": false },
-    { "id": "crownEmblem", "label": "皇冠徽章", "nodeNames": ["crown-emblem", "crown-panel", "crown-glyph"], "movable": false }
+    {
+      "id": "body",
+      "label": "箱体",
+      "nodeNames": [
+        "body"
+      ],
+      "movable": false
+    },
+    {
+      "id": "lid",
+      "label": "箱盖",
+      "nodeNames": [
+        "lid-hinge",
+        "lid"
+      ],
+      "movable": true,
+      "pivotNode": "lid-hinge"
+    },
+    {
+      "id": "frontLatch",
+      "label": "前锁扣",
+      "nodeNames": [
+        "front-latch"
+      ],
+      "movable": false
+    },
+    {
+      "id": "sideHandle",
+      "label": "侧把手",
+      "nodeNames": [
+        "side-handle"
+      ],
+      "movable": false
+    },
+    {
+      "id": "crownEmblem",
+      "label": "皇冠徽章",
+      "nodeNames": [
+        "crown-emblem",
+        "crown-panel",
+        "crown-glyph"
+      ],
+      "movable": false
+    }
   ],
   "capabilityBindings": [
-    { "capabilityId": "state:open", "componentIds": ["lid"], "effect": "transform" }
+    {
+      "capabilityId": "state:closed",
+      "componentIds": [
+        "lid"
+      ],
+      "effect": "transform"
+    },
+    {
+      "capabilityId": "state:open",
+      "componentIds": [
+        "lid"
+      ],
+      "effect": "transform"
+    }
   ],
-  "validationConfigurations": [],
-  "designOverrides": [],
+  "validationConfigurations": [
+    {
+      "id": "default",
+      "dimensions": {
+        "width": 600,
+        "depth": 520,
+        "height": 500
+      },
+      "parameters": {},
+      "stateId": "closed"
+    },
+    {
+      "id": "state-open",
+      "dimensions": {
+        "width": 600,
+        "depth": 520,
+        "height": 500
+      },
+      "parameters": {},
+      "stateId": "open",
+      "compareAgainst": "default",
+      "testsCapability": "state:open"
+    }
+  ],
+  "designOverrides": [
+    {
+      "componentId": "body",
+      "property": "overallDimensions",
+      "instruction": "将皇冠收纳箱的设计标称尺寸设为 600 × 520 × 500 mm，并保持程序化模型的原生外观比例。",
+      "source": "user",
+      "targetValue": "600 × 520 × 500 mm"
+    }
+  ],
   "footprintPolicy": {
     "type": "configuration-dimensions"
   },
@@ -41,19 +142,44 @@
     "type": "none"
   },
   "exportCapabilities": {
-    "formats": ["glb"],
+    "formats": [
+      "glb"
+    ],
     "materialPolicy": "portable-pbr",
     "preserveComponentNodes": true
   },
-  "candidateEvidence": null,
+  "candidateEvidence": {
+    "reportPath": "apps/web/lib/bedroom/assets/user-generated/crown-chest/evidence/candidate-report.json",
+    "verifiedAt": "2026-09-02T09:55:58.136Z",
+    "contractHash": "c58197f18aacbb1be35f092a8d300ae5e4a50dafcbd0d42ea5656017962584c9",
+    "configurationCount": 2,
+    "statesCovered": [
+      "closed",
+      "open"
+    ],
+    "parametersCovered": [],
+    "purposesCovered": [
+      "scene",
+      "review",
+      "export"
+    ],
+    "structuralChecksPassed": true,
+    "behaviorChecksPassed": true,
+    "runtimeChecksPassed": true
+  },
   "reconstruction": {
     "profile": "img2threejs-generic",
-    "referenceFiles": ["/generated-assets/crown-chest/reference.png"]
+    "referenceFiles": [
+      "/generated-assets/crown-chest/reference.png"
+    ]
   },
   "exportReady": false,
-  "exportIssue": "已提供可移植顶点色导出材质；等待补充可靠毫米尺寸并完成正式 GLB 重载证据。",
+  "exportIssue": "GLB export was not requested for this revision.",
   "exportEvidence": null,
-  "dimensionSource": null,
+  "dimensionSource": {
+    "type": "other-context",
+    "note": "本次资产修订采用的设计标称尺寸；按程序化模型原生包围盒比例校准为 600 × 520 × 500 mm，不是从参考图片推测的实测尺寸。"
+  },
   "qualityEvidence": [
     {
       "kind": "reference",
@@ -76,5 +202,19 @@
     "perspective"
   ],
   "approvedFactoryHash": null,
-  "reviewedAt": null
+  "reviewedAt": null,
+  "runtimeEvidence": {
+    "reportPath": "apps/web/lib/bedroom/assets/user-generated/crown-chest/evidence/runtime-esm-report.json",
+    "verifiedAt": "2026-09-02T09:55:58.136Z",
+    "contractHash": "c58197f18aacbb1be35f092a8d300ae5e4a50dafcbd0d42ea5656017962584c9",
+    "runtimeAbiVersion": 1,
+    "artifactSetHash": "ae11fd3603d5f7c29888f0d35577310e7782cb570435b077fc9d4079e1252df0",
+    "configurationsTested": 2,
+    "moduleLoaded": true,
+    "resourcesVerified": true,
+    "dimensionsMatch": true,
+    "grounded": true,
+    "namedNodesPreserved": true,
+    "deterministic": true
+  }
 }

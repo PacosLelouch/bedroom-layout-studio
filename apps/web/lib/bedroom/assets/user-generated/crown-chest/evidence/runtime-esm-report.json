@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "assetId": "crown-chest",
+  "verifiedAt": "2026-09-02T09:55:58.136Z",
+  "contractHash": "c58197f18aacbb1be35f092a8d300ae5e4a50dafcbd0d42ea5656017962584c9",
+  "artifactSetHash": "ae11fd3603d5f7c29888f0d35577310e7782cb570435b077fc9d4079e1252df0",
+  "runtimeAbiVersion": 1,
+  "configurationsTested": 2,
+  "moduleLoaded": true,
+  "resourcesVerified": true,
+  "dimensionsMatch": true,
+  "grounded": true,
+  "namedNodesPreserved": true,
+  "deterministic": true
+}

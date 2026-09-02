@@ -18,21 +18,21 @@ import type { FurnitureAssetCatalogEntry } from "../package-types";
 import type { FurnitureAssetManifestV3 } from "../manifest-types";
 
 export const FURNITURE_PACKAGE_CATALOG: FurnitureAssetCatalogEntry[] = [
-  { manifest: manifest0 as FurnitureAssetManifestV3, contractHash: "a7c0ee73d890b69aee19b2abe14486b64cc1b4514b83f5d934bd89b5977fc451" },
-  { manifest: manifest1 as FurnitureAssetManifestV3, contractHash: "b02ca89ddd5011a7947e0a06fdd2302de2030d2da1122170a2405fb2d519ca25" },
-  { manifest: manifest2 as FurnitureAssetManifestV3, contractHash: "46dc75d24582beebaa9ab85082b4d9b605f91c9dbd02825b789792d516566cfb" },
-  { manifest: manifest3 as FurnitureAssetManifestV3, contractHash: "b1b5cb6e7ca0611fe8a6bcc0d8b50b42ecf9d13fb5a1e8ab6aea06cae17bb23b" },
-  { manifest: manifest4 as FurnitureAssetManifestV3, contractHash: "58f692a6aef3c36af5f927746d73d820e027066fc0245c00183b2bd6de1b2170" },
-  { manifest: manifest5 as FurnitureAssetManifestV3, contractHash: "58d7fbaba4ab1dc00d92f18a0a18bd27129b2eeacfd493c8bafebac85cc556c3" },
-  { manifest: manifest6 as FurnitureAssetManifestV3, contractHash: "fc8781f5337290340ff130ae01a36b146f006ef3e0412fc3299bc564318c9055" },
-  { manifest: manifest7 as FurnitureAssetManifestV3, contractHash: "e89c050b75af160d33881aa22f91c1689bf42b5aed8dea3f7397371f67c84ca2" },
-  { manifest: manifest8 as FurnitureAssetManifestV3, contractHash: "5dc027fefb60d84b032f0768f17c0d0799a4e5f5f66a7e7dc71864b557673f22" },
-  { manifest: manifest9 as FurnitureAssetManifestV3, contractHash: "001901a8488394407dcac65104f48c8b22ef6c2cd42a4a27b3c7a0fa753f4aaa" },
-  { manifest: manifest10 as FurnitureAssetManifestV3, contractHash: "e153c6359b5c0074f8dbee8c9d443e400bf838b2ecbd9115c0d7ccd594797b24" },
-  { manifest: manifest11 as FurnitureAssetManifestV3, contractHash: "d005c428785046cf28c75a637fb5b81c885132b8c852ca5ed1af1d21851ba07a" },
-  { manifest: manifest12 as FurnitureAssetManifestV3, contractHash: "7e149239915ef0f4aed7e4a55b3e9725df96a1244a2ed4241a5ff5c77a853f3d" },
-  { manifest: manifest13 as FurnitureAssetManifestV3, contractHash: "cc11c3c6a0a6422154e171a7eaff7334d4d24e00b6f7a19948a947f593ace4e5" },
-  { manifest: manifest14 as FurnitureAssetManifestV3, contractHash: "690c85ad0a16cfdb66d8b86c118204f277fd20fa87f5ca5518d049abfba8b415" },
+  { manifest: manifest0 as FurnitureAssetManifestV3, contractHash: "a46f25440a9ddd6a27257fd6634d4bd38f4a5ac25aff80cf348e939651c72238" },
+  { manifest: manifest1 as FurnitureAssetManifestV3, contractHash: "9aace6ee907ffa12bde98b15a1bf6c03fc698cc2bddba7b518c73365ab0d9eaa" },
+  { manifest: manifest2 as FurnitureAssetManifestV3, contractHash: "75b6a948308036b3224a927a76bbbc6dadd492e0ed0c9b57b5f7ea169dd3a521" },
+  { manifest: manifest3 as FurnitureAssetManifestV3, contractHash: "0155e2c576d193a0ebda3c8998cefdfe255ce1d4f2f439f43f000aaff87a88c1" },
+  { manifest: manifest4 as FurnitureAssetManifestV3, contractHash: "6d4e4b5afbba17b7f373b5909ce23bcd019db8a1111c2e1513ea93aebde6201d" },
+  { manifest: manifest5 as FurnitureAssetManifestV3, contractHash: "8a34459e573dc5580cb211b5e081bb45ab2bce2d30386316f68a7de5d61b011a" },
+  { manifest: manifest6 as FurnitureAssetManifestV3, contractHash: "97cce4b0789a767ff27ef2e25eaaec657234f4ec3b75edab1648bc7aa2a17c14" },
+  { manifest: manifest7 as FurnitureAssetManifestV3, contractHash: "1d2720c06db11d7738f08a60320375cf3c135b5259799714912e5f347427d901" },
+  { manifest: manifest8 as FurnitureAssetManifestV3, contractHash: "51a212170f3d4e2ddd76b1ea9363f5787f01306355434b110c466daf5bc08d75" },
+  { manifest: manifest9 as FurnitureAssetManifestV3, contractHash: "a3b542a61c19e9bcd8a4be7f5624c9180f81256703f04ceb4016f2ffac9b874c" },
+  { manifest: manifest10 as FurnitureAssetManifestV3, contractHash: "ff30e9ec0dfbbf5d8bb56fdef127b9742c15e3ae8fd1eb039f884208e5209629" },
+  { manifest: manifest11 as FurnitureAssetManifestV3, contractHash: "bfe8ed6f9485d867179f2269c10e104bbbe7123279d4149582353c7ac10f5d3d" },
+  { manifest: manifest12 as FurnitureAssetManifestV3, contractHash: "054ed58a830f24f5d5422541f87f42de9635c493594481a4ba76018ef940de48" },
+  { manifest: manifest13 as FurnitureAssetManifestV3, contractHash: "307110a822b9138b849753223402ade096d4994ed38644075a5b08a35ff70830" },
+  { manifest: manifest14 as FurnitureAssetManifestV3, contractHash: "c58197f18aacbb1be35f092a8d300ae5e4a50dafcbd0d42ea5656017962584c9" },
 ];
 
 export const BUILTIN_PACKAGE_CATALOG = FURNITURE_PACKAGE_CATALOG.filter((entry) => entry.manifest.assetScope === "builtin");

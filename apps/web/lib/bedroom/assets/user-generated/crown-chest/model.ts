@@ -340,7 +340,10 @@ export function createSourceModel(options: CrownChestOptions = {}): THREE.Group 
   // warm point light spilling from the emblem onto nearby gold/enamel (very subtle)
   const glow = new THREE.PointLight(0xffcf6a, 0.12, 0.45, 2.5);
   glow.position.set(0, 0, 0.14);
-  emblem.add(glow);
+  // Lighting belongs to the interactive scene/review presentation. Keep the
+  // export graph portable and self-contained; exporters must not receive
+  // decorative lights alongside the furniture geometry.
+  if (!options.exportSafeMaterials) emblem.add(glow);
   emblem.position.set(0, -0.13, 0.42);
   root.add(emblem);
   nodes.emblem = emblem;
