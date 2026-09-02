@@ -1,9 +1,10 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as THREE from "three";
-import { computeFurnitureAssetContractHash, readFurniturePackageContractSources, validateFurnitureAssetManifest } from "../../../../scripts/furniture-asset-contract.mjs";
+import { computeFurnitureAssetContractHash, readFurniturePackageContractSources, validateFurnitureAssetManifest } from "../../../../apps/web/scripts/furniture-asset-contract.mjs";
 
 const projectRoot = process.cwd();
+const webRoot = path.resolve(projectRoot, "apps", "web");
 const assetId = process.argv[2];
 const outIndex = process.argv.indexOf("--out");
 const outPath = outIndex >= 0 ? path.resolve(projectRoot, process.argv[outIndex + 1]) : null;
@@ -13,7 +14,7 @@ if (!assetId || !/^[a-z0-9][a-z0-9-]{1,63}$/.test(assetId)) throw new Error("Usa
 const scopeIndex = process.argv.indexOf("--scope");
 const assetScope = scopeIndex >= 0 ? process.argv[scopeIndex + 1] : "user-generated";
 if (!["builtin", "user-generated"].includes(assetScope)) throw new Error("--scope 必须是 builtin 或 user-generated");
-const assetDir = path.resolve(projectRoot, "lib", "bedroom", "assets", assetScope, assetId);
+const assetDir = path.resolve(webRoot, "lib", "bedroom", "assets", assetScope, assetId);
 const manifest = JSON.parse(await readFile(path.join(assetDir, "asset.json"), "utf8"));
 const staticIssues = validateFurnitureAssetManifest(manifest, { requireCandidateReady: candidateMode });
 if (manifest.id !== assetId) staticIssues.push("manifest ID 必须与目录名一致");
@@ -71,9 +72,9 @@ function dispose(root) {
 
 if (configurations.length) {
   const { createServer } = await import("vite");
-  const server = await createServer({ appType: "custom", configFile: false, root: projectRoot, resolve: { alias: { "@": projectRoot } }, server: { middlewareMode: true } });
+  const server = await createServer({ appType: "custom", configFile: false, root: webRoot, resolve: { alias: { "@": webRoot } }, server: { middlewareMode: true } });
   try {
-    const runtimeModule = await server.ssrLoadModule(`/${path.relative(projectRoot, runtimePath).replaceAll("\\", "/")}`);
+    const runtimeModule = await server.ssrLoadModule(`/${path.relative(webRoot, runtimePath).replaceAll("\\", "/")}`);
     const factory = runtimeModule.createFurnitureModel;
     if (typeof factory !== "function") throw new Error("runtime.ts 必须导出 createFurnitureModel");
     const signatures = new Map();

@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { computeFurnitureAssetContractHash, readFurniturePackageContractSources } from "../../../../scripts/furniture-asset-contract.mjs";
+import { computeFurnitureAssetContractHash, readFurniturePackageContractSources } from "../../../../apps/web/scripts/furniture-asset-contract.mjs";
 
 const run = promisify(execFile);
 const projectRoot = process.cwd();
@@ -18,7 +18,7 @@ if (!assetId || !materialsAccepted || !appearanceAccepted || !materialEvidence |
 const scopeIndex = process.argv.indexOf("--scope");
 const assetScope = scopeIndex >= 0 ? process.argv[scopeIndex + 1] : "user-generated";
 if (!["builtin", "user-generated"].includes(assetScope)) throw new Error("--scope 必须是 builtin 或 user-generated");
-const assetDir = path.resolve(projectRoot, "lib", "bedroom", "assets", assetScope, assetId);
+const assetDir = path.resolve(projectRoot, "apps", "web", "lib", "bedroom", "assets", assetScope, assetId);
 const manifestPath = path.join(assetDir, "asset.json");
 const evidenceDir = path.join(assetDir, "evidence");
 const candidateReportPath = path.join(evidenceDir, "candidate-report.json");
@@ -84,7 +84,7 @@ try {
   await atomicJson(candidateReportPath, { ...candidateReport, verifiedAt: now });
   await atomicJson(glbReportPath, { ...glbReport, verifiedAt: now, materialEvidence: materialEvidenceEnvelope, appearanceEvidence: appearanceEvidenceEnvelope });
   await atomicJson(manifestPath, admitted);
-  await run(process.execPath, [path.join(projectRoot, "scripts", "sync-furniture-assets.mjs")], { cwd: projectRoot });
+  await run(process.execPath, [path.join(projectRoot, "apps", "web", "scripts", "sync-furniture-assets.mjs")], { cwd: path.join(projectRoot, "apps", "web") });
   if (!skipProjectChecks) {
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
     await run(npm, ["run", "assets:check"], { cwd: projectRoot });
@@ -105,7 +105,7 @@ try {
   };
   await atomicJson(manifestPath, failedDraft);
   try {
-    await run(process.execPath, [path.join(projectRoot, "scripts", "sync-furniture-assets.mjs")], { cwd: projectRoot });
+    await run(process.execPath, [path.join(projectRoot, "apps", "web", "scripts", "sync-furniture-assets.mjs")], { cwd: path.join(projectRoot, "apps", "web") });
   } catch (syncError) {
     const syncMessage = syncError instanceof Error ? syncError.message : String(syncError);
     throw new AggregateError([error, syncError], `候选准入失败，manifest 已降为 draft，但 registry 回滚同步失败：${syncMessage}`);

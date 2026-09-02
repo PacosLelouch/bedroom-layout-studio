@@ -1,10 +1,10 @@
 # 后端、Agent 与家具资产云端化计划
 
-> 状态：规划中，暂不实施后端化
-> 文档版本：2.1
+> 状态：实施中；A–F 的代码基础已完成，G–H 与生产启用仍受门禁约束
+> 文档版本：3.0
 > 更新日期：2026-09-01
 > 当前决策：后端作为唯一数据与 Agent 系统；ChatGPT Sites、GitHub Pages 或其他页面只作为客户端
-> 当前优先级：先稳定本地布局和家具资产 v3 契约，再分阶段建设后端
+> 当前优先级：完成真实 PostgreSQL/S3/OIDC 集成验收与可信技能端到端试运行，再建设普通用户隔离 Runner
 
 ## 1. 目的与范围
 
@@ -20,7 +20,7 @@
 - 同时支持 ChatGPT Sites、GitHub Pages 或其他 Web 客户端；
 - 普通用户上传的 JS/TS 不在主页面或普通 API 进程中直接执行。
 
-本计划当前只作为技术决策文档，不启用数据库、对象存储、Agent Runner 或账号系统，也不修改现有部署。
+本计划已经进入代码实施阶段。仓库中提供数据库 schema、filesystem/S3 存储适配器、API、Agent Worker、OIDC 验证入口、SSE 客户端和部署模板；本次实施不连接或修改生产数据库、对象存储、账号系统和现有部署。
 
 ## 2. 总体架构
 
@@ -56,7 +56,7 @@ API 进程不能直接执行用户代码；Runner 不能持有生产数据库超
 ### 3.1 仓库目录
 
 ```text
-lib/bedroom/assets/
+apps/web/lib/bedroom/assets/
 ├── manifest-types.ts                 共享 manifest v3 类型
 ├── package-types.ts                  统一包与 source model 类型
 ├── contracts.ts                      正式目录投影类型
@@ -204,7 +204,7 @@ PostgreSQL 18（始终更新到当前受支持 minor）
 
 不只分成笼统的 `frontend/` 和 `backend/`：API 与 Agent Worker 的权限、依赖、扩缩容和故障影响不同，因此分别作为 `apps/api` 和 `apps/agent-worker`。`.agents/skills` 保留在仓库根目录，便于 Codex 发现和子模块维护，但绝不能进入 Web bundle。
 
-当前 `lib/bedroom/assets` 在迁移期保持原位；共享契约稳定后再迁至 `packages/furniture-assets/assets/<builtin|user-generated>/<asset-id>/`。迁移只改变物理位置，不改变资产包格式。Agent 在独立工作区制作 revision，不直接改写正在运行的网站资源。
+仓库家具包保留在 `apps/web/lib/bedroom/assets`，纯类型和校验逻辑已抽取到 `packages/contracts` 与 `packages/furniture-assets`。这一选择避免复制静态可加载模块，同时保持资产包格式不变。Agent 在独立工作区制作 revision，不直接改写正在运行的网站资源。
 
 ### 5.3 队列
 
@@ -598,6 +598,21 @@ npm run deploy:web:pages
 
 建设加强隔离 Runner、默认无网络、硬资源限制、安全派生资产和故障演练，通过后才向普通用户开放。
 
+### 15.1 2026-09-01 实施记录
+
+| 阶段 | 仓库状态 | 说明 |
+|---|---|---|
+| A | 完成 | 三套布局、本地保存/副本、manifest v3、动态加载、审核与资产门禁测试保持通过。 |
+| B | 完成 | 前端迁入 `apps/web`，根目录改为 npm workspaces；Sites 与 Pages 使用独立构建命令。 |
+| C | 基础完成 | layout、manifest、Agent event、API DTO、SSE 解码和远程布局 adapter 已抽到共享包；云端 GLB/scene-json 产品加载仍随 G 阶段接入。 |
+| D | 开发基础完成 | PostgreSQL schema/migration、内存与 PostgreSQL repository、filesystem/S3 adapter、OIDC 验证入口和布局/资产 API 已实现。配额执行、完整 audit 写入、浏览器签名上传流程以及真实 PostgreSQL/S3/OIDC 集成验收尚未完成。 |
+| E | 开发基础完成 | Agent run、全序公开事件、SSE replay、幂等创建/消息/审批、模拟 Worker、超时和心跳字段已实现。持久化 request 生命周期、运行中跨进程取消、死任务回收和负载故障测试仍待完成。 |
+| F | 执行骨架完成 | 独立 Worker、pg-boss、受限工作区/worktree、Codex App Server stdio 握手、turn 事件映射和低权限 systemd 模板已实现。家具包装技能的真实端到端 artifact/candidate 发布、管理员私测和可复现 Runner 镜像尚未完成。 |
+| G | 部分界面完成 | Web Agent 面板可创建 run、增量读取/恢复 SSE、取消、补充信息和审批；普通用户参考图到派生 GLB/scene-json 的完整链路、配额和成本策略尚未实现。 |
+| H | 未开始 | 任意用户 JS/TS 仍禁止在生产执行；加强隔离 Runner 和故障演练是开放前硬门禁。 |
+
+本轮只修改仓库代码、迁移、测试、文档和基础设施模板；没有部署 Sites/Pages，没有启动或迁移生产数据库，没有创建 S3 bucket/OIDC 客户端，也没有变更线上 DNS、TLS 或账号。`infra/` 中的 Caddy/systemd 文件必须在目标主机上经真实密钥管理、备份和恢复演练后才能视为生产配置。
+
 ## 16. 上线验收
 
 - manifest v3 是唯一家具契约；
@@ -630,7 +645,7 @@ npm run deploy:web:pages
 10. 最低开发服务器为 4 vCPU、16 GB、200 GB NVMe、单任务并发。
 11. 推荐私有测试服务器为 8 vCPU、32 GB、500 GB–1 TB NVMe、2 个标准任务并发。
 12. 正式环境拆分 API、PostgreSQL、Runner 和对象存储安全边界。
-13. 后端建设仍不着急；先完成本地资产 v3 与布局体验，再按“共享包 → 前端迁移 → 最小 API → Agent Worker”推进。
+13. A–F 的代码基础已落地；下一步按“真实依赖集成验收 → 私有可信任务试运行 → 加强隔离 Runner → 普通用户开放”推进。
 
 ## 18. 参考资料
 

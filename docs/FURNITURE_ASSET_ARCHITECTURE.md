@@ -17,7 +17,7 @@ contract hash 与候选准入规则。目录只区分资产从哪里供给，不
 ## 唯一包格式
 
 ```text
-lib/bedroom/assets/
+apps/web/lib/bedroom/assets/
 ├─ builtin/
 │  └─ <asset-id>/
 │     ├─ asset.json       # 必需

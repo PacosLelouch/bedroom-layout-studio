@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+apps/*/.next/
+apps/*/out/
 
 # misc
 .DS_Store
@@ -29,18 +31,22 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
 
 # typescript
 next-env.d.ts
-/dist/
-/.wrangler/
+*.tsbuildinfo
+dist/
+.wrangler/
 /.sites-runtime/
 /outputs/
 /work/
 /.workbuddy/
+/.local/
+apps/web/.sites-runtime/
 
 # NOTE: .agents/skills/img2threejs is now tracked as a git submodule
 # (see `git submodule add`). It is no longer an ignored local junction.

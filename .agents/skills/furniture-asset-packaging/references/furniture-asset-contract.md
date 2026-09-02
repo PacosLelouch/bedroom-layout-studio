@@ -4,7 +4,7 @@ Every furniture package has the same physical and logical shape. The only direct
 delivery ownership:
 
 ```text
-lib/bedroom/assets/<builtin|user-generated>/<asset-id>/
+apps/web/lib/bedroom/assets/<builtin|user-generated>/<asset-id>/
 ├─ asset.json       # required manifest v3
 ├─ runtime.ts       # required; exports createFurnitureModel
 ├─ model.ts         # optional; exports createSourceModel

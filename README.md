@@ -1,81 +1,72 @@
 # 卧室布局工作台
 
-面向多卧室家具规划的 Three.js 交互 Web 项目。支持房间切换、家具添加、选取、拖拽、旋转、复制、删除、尺寸与状态编辑、吸附、边界/碰撞提示、墙体轮廓调整、家具预制体，以及平面与 3D 视角。项目同时提供统一家具资产契约、草稿/候选审核和 GLB 兼容验证。
+卧室布局工作台是一个 npm workspaces 单仓库：浏览器端提供 Three.js 房间与家具编辑、布局导入导出和家具审核；可选的自建控制面提供多租户布局版本、家具 revision、对象存储和可恢复的 Agent SSE；独立 Worker 在受限 Git worktree 中运行 Codex App Server。Sites 与 GitHub Pages 始终只是客户端，不承载数据库、对象存储或 Agent 执行。
 
-## 本地运行
+## 快速开始
 
-要求 Node.js `>= 22.13.0`。克隆后先初始化只读的 `img2threejs` Git submodule：
+要求 Node.js `>= 22.13.0`。首次克隆时初始化只读的 `img2threejs` submodule，然后安装依赖：
 
 ```bash
 git submodule update --init --recursive
 npm install
-npm run dev
+npm run dev:web
 ```
 
-默认地址为 `http://localhost:5555`。可通过 `WEB_PORT` 或 `PORT` 覆盖端口；同一工作树不要同时启动多个开发服务，以免 Windows 上的 Vite 依赖缓存发生写入冲突。
+Web 默认监听 `http://127.0.0.1:5555`；`WEB_HOST`、`WEB_PORT`、`PUBLIC_BASE_PATH` 和 `PUBLIC_API_BASE_URL` 均可配置。未提供 API 地址时，布局编辑和浏览器本地保存仍可使用，Agent 面板会明确显示离线状态。
 
-完整验证会依次检查资产注册表、执行 Vinext 生产构建、检查客户端体积预算并运行全部测试：
+完整的本地云端开发配置见 [docs/BACKEND_DEVELOPMENT.md](docs/BACKEND_DEVELOPMENT.md)。复制 `.env.example` 的字段到受保护的运行环境后，可分别启动：
 
 ```bash
-npm test
+npm run dev:api
+npm run dev:worker
+npm run dev:all
 ```
 
-只执行生产构建可运行 `npm run build`。
+`dev:all` 需要 PostgreSQL、Worker capability token、绝对工作区路径和仓库路径。开发模式可使用内存 repository/queue 与 filesystem storage；生产身份入口为 OIDC Bearer token，开发身份头不能作为生产认证方案。
 
-## 目录
+## 仓库结构
 
-- `app/`：页面和界面样式。
-- `components/bedroom-viewport.tsx`：卧室 Three.js 画布和 React 生命周期入口。
-- `lib/bedroom/scene/`：房间场景、相机、交互、资源缓存和按需渲染控制器。
-- `lib/bedroom/types.ts`：房间和家具布局数据协议。
-- `lib/bedroom/layouts/`：三个内置房间布局的 JSON 资产、索引和完整格式说明。
-- `lib/bedroom/room-layouts.ts`：加载并校验布局 JSON 的入口。
-- `public/floorplans/`：供页面直接访问的三个 SVG 标尺底图；`docs/` 中保留原始交付文件。
-- `lib/bedroom/assets/builtin/`：随网站构建发布的内置家具包。
-- `lib/bedroom/assets/user-generated/`：当前随前端读取、未来由后端 API 提供的用户资产包。
-- `lib/bedroom/assets/registry/`：从统一家具包生成的目录和运行时加载器。
-- `lib/bedroom/asset-registry.ts`：布局编辑器使用的兼容门面；不存放模型工厂。
-- `app/furniture-review/`：内置、草稿、候选和归档家具的统一审核入口。
-- `.agents/skills/furniture-asset-packaging/`：家具创建、包装、修改、验证和候选准入编排技能。
-- `.agents/skills/img2threejs/`：只读 Git submodule，在需要连续几何重建时作为子模块使用。
-- [`docs/FURNITURE_ASSET_ARCHITECTURE.md`](docs/FURNITURE_ASSET_ARCHITECTURE.md)：统一家具包、所有权范围和生命周期。
-- [`docs/IMG2THREEJS_INTEGRATION.md`](docs/IMG2THREEJS_INTEGRATION.md)：只读图像重建子模块的接入约定。
+- `apps/web/`：Vinext/Vite 客户端、Three.js 编辑器、家具审核和 Agent 面板；该目录也是 Sites 项目根。
+- `apps/api/`：Fastify API、OIDC/开发身份、布局与资产版本、Agent 控制面和 SSE。
+- `apps/agent-worker/`：pg-boss 消费者、受限 worktree 生命周期、Codex App Server stdio 适配和公开事件映射。
+- `packages/contracts/`：layout v2、manifest v3、API DTO 和 Agent 事件的共享协议。
+- `packages/bedroom-core/`：与浏览器框架无关的 API 客户端、SSE 解码器和远程布局 adapter。
+- `packages/furniture-assets/`：家具契约校验、候选就绪判定和共享类型。
+- `packages/database/`：PostgreSQL Drizzle schema 与迁移。
+- `packages/storage/`：不可变 filesystem/S3 对象存储 adapter。
+- `apps/web/lib/bedroom/assets/<builtin|user-generated>/`：统一的仓库家具包。
+- `.agents/skills/furniture-asset-packaging/`：家具创建、包装、修改、验证和候选准入技能。
+- `.agents/skills/img2threejs/`：只读 submodule，需要连续几何重建时由包装技能调用。
+- `infra/`：Caddy 和低权限 systemd 样例，不包含真实密钥。
 
-布局数据采用毫米和 Y-up 坐标。三个内置方案只从 JSON 资产加载；用户可把所有房间保存到浏览器，也可另存为 JSON 文件并再次导入。JSON 的目录组织、字段协议和扩展步骤见 [`lib/bedroom/layouts/README.md`](lib/bedroom/layouts/README.md)。
+三个内置房间只从 `apps/web/lib/bedroom/layouts/*.json` 加载；详细协议见 [布局格式说明](apps/web/lib/bedroom/layouts/README.md)。布局单位为毫米，坐标系为 Y-up。用户可保存到浏览器、另存 JSON 或重新导入。
 
 ## 家具资产
 
-所有家具统一使用 `asset.json + runtime.ts + 可选 model.ts`。`builtin` 和 `user-generated` 表示资产所有权与交付范围，不表示建模方式；由技能生成的家具也可以作为内置资产随仓库发布。
+所有家具使用 `asset.json + runtime.ts + 可选 model.ts` 的 manifest v3 包。`builtin` 与 `user-generated` 表示所有权和交付范围，不表示建模方法；两者共享同一契约。
 
-资产生命周期为 `draft → candidate → approved → archived`。`candidate` 表示尺寸、默认配置、状态、参数、组件、GLB 和证据均已技术就绪，只等待人工外观批准；只有证据有效的 `approved` 资产进入正式家具目录。审核页面为 `/furniture-review?asset=<asset-id>`，旧 `/asset-review` 地址仅保留兼容。
+资产生命周期为 `draft → candidate → approved → archived`。后端分别保存 `rawStatus` 和重新推导的 `effectiveStatus`；模型、能力或契约 hash 变化会使旧证据失效。revision 引用的 artifact 必须已存在于对应租户和资产的私有对象前缀下；只有技术门禁通过的 candidate 才能被明确批准。仓库审核页是 `/furniture-review?asset=<asset-id>`。
 
-## 标尺图接入约定
+进一步说明见 [家具资产架构](docs/FURNITURE_ASSET_ARCHITECTURE.md) 和 [img2threejs 接入约定](docs/IMG2THREEJS_INTEGRATION.md)。
 
-原始 SVG 仅作资料归档时放在 `docs/`，浏览器要显示的副本放在 `public/floorplans/`，页面用 `/floorplans/文件名.svg` 引用。几何计算不直接解析 SVG 路径，而是把图中的权威毫米尺寸同步转录到 `lib/bedroom/layouts/*.json`，保证 2D/3D、碰撞检测、面积统计和原图对照使用同一套房型数据。
-
-目前衣柜规则为：平开门柜深不小于 600 mm，开启区按实际门扇宽度计算（例如 1000 mm 双开门按每扇 500 mm）；推拉门柜深不小于 650 mm，不强制设置柜前硬净空。飘窗收纳使用由窗台承托的摆柜，并记录柜底标高，不能把窗前悬空区域当成默认吊柜安装位。
-
-## 部署到 GitHub Pages
-
-仓库已包含 `.github/workflows/deploy-pages.yml`。首次使用时，在 GitHub 仓库的
-**Settings → Pages → Build and deployment → Source** 中选择 **GitHub Actions**。
-之后推送到 `main` 或 `master` 分支即可自动构建并部署，也可以在 Actions 页面手动运行。
-
-工作流会自动处理两种地址：
-
-- 项目站点：`https://<用户>.github.io/<仓库名>/`
-- 用户或组织站点：仓库名为 `<用户>.github.io` 时使用根路径
-
-本地验证静态导出：
+## 构建与验证
 
 ```bash
-npm run build:pages
+npm run typecheck
+npm test
+npm run build:web:sites
+npm run build:web:pages
 ```
 
-未设置 GitHub Actions 环境变量时会按根路径生成 `out/`。如需在本地模拟项目站点：
+`npm test` 运行所有 workspace 单元/集成测试和 Web 的资产契约、生产构建、体积预算与功能测试。双目标构建使用同一源码：Sites 以 `/` 为默认 base path，Pages 可通过 `PUBLIC_BASE_PATH=/bedroom-layout-studio/` 验证项目子路径。
 
-```bash
-PAGES_BASE_PATH=/bedroom-layout-studio npm run build:pages
-```
+构建命令没有部署副作用。Sites 发布和 Pages 发布均被单独审批门禁保护；本仓库的 Pages workflow 仅在 GitHub Actions 明确触发后部署 `apps/web/out`。
 
-现有 `npm run build` 和 Sites 部署配置保持不变。
+## 安全与生产边界
+
+- 浏览器只连接产品 API/SSE，不直连 Codex App Server，也不接触 OpenAI 主凭证。
+- API 不执行源码；Worker 不持有数据库超级用户或对象存储主密钥。
+- 当前进程式 Worker 只允许管理员可信仓库任务。普通用户任意 JS/TS 必须等加强隔离 Runner（无网络、只读根、资源/PID/磁盘限制）和故障演练完成后才能开放。
+- `infra/` 是部署模板，不代表已配置备份、高可用、生产 OIDC、TLS 或恢复演练。
+
+实施范围、已完成阶段和仍需生产环境验收的门禁以 [云端与家具资产计划](meta_plan/CLOUD_STORAGE_AND_FURNITURE_ASSET_PLAN.md) 为准。

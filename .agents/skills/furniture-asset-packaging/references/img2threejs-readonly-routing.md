@@ -5,9 +5,9 @@ profile and pass an asset-local state path, for example:
 
 ```powershell
 python .agents/skills/img2threejs/forge/state.py init `
-  --state lib/bedroom/assets/<builtin|user-generated>/<asset-id>/reconstruction/state.json `
+  --state apps/web/lib/bedroom/assets/<builtin|user-generated>/<asset-id>/reconstruction/state.json `
   --reference <reference> --profile generic `
-  --spec lib/bedroom/assets/<builtin|user-generated>/<asset-id>/reconstruction/object-sculpt-spec.json
+  --spec apps/web/lib/bedroom/assets/<builtin|user-generated>/<asset-id>/reconstruction/object-sculpt-spec.json
 ```
 
 Put sourced dimensions, required states, parameters, semantic components, GLB-safe appearance, and

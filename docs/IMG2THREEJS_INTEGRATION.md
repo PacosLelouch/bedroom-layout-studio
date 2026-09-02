@@ -8,8 +8,8 @@ git submodule update --init --recursive
 ```
 
 不支持本机硬编码路径或 Junction 接入。浏览器只加载已经包装到统一家具包中的静态内容：
-仓库随包资产位于 `lib/bedroom/assets/builtin/<asset-id>/`，当前前端暂存的用户资产位于
-`lib/bedroom/assets/user-generated/<asset-id>/`。两者都使用 `asset.json + runtime.ts`，可选
+仓库随包资产位于 `apps/web/lib/bedroom/assets/builtin/<asset-id>/`，当前前端暂存的用户资产位于
+`apps/web/lib/bedroom/assets/user-generated/<asset-id>/`。两者都使用 `asset.json + runtime.ts`，可选
 `model.ts`；区别仅是供给范围，不是生成方式。后续后端计划通过 provider/API 边界替换用户
 资产目录读取。
 
