@@ -1,5 +1,5 @@
 import { furnitureCandidateReadinessIssues } from "../contract-core.mjs";
-import type { FurnitureCandidateEvidence, GlbExportEvidence } from "../manifest-types";
+import type { FurnitureCandidateEvidence, FurnitureRuntimeEvidence, GlbExportEvidence } from "../manifest-types";
 import type { FurnitureAssetRegistryEntry } from "../package-types";
 import { BUILTIN_PACKAGE_CATALOG } from "./catalog.generated";
 import { FRONTEND_USER_GENERATED_ASSETS } from "../providers/user-generated-provider";
@@ -8,9 +8,10 @@ function repositoryEvidence(entry: (typeof BUILTIN_PACKAGE_CATALOG)[number]) {
   const manifest = entry.manifest;
   const statesCovered = manifest.states.map((state) => state.id);
   const parametersCovered = manifest.parameterDefinitions.map((definition) => ({ id: definition.id, values: [...new Set(manifest.validationConfigurations.map((configuration) => configuration.parameters[definition.id]).filter((value) => value !== undefined))] }));
-  const candidateEvidence: FurnitureCandidateEvidence = { reportPath: "tests/builtin-asset-contract.test.mjs", verifiedAt: manifest.reviewedAt ?? "repository-validation", contractHash: entry.contractHash, configurationCount: manifest.validationConfigurations.length, statesCovered, parametersCovered, purposesCovered: ["scene", "review", "export"], structuralChecksPassed: true, behaviorChecksPassed: true, glbChecksPassed: true };
+  const candidateEvidence: FurnitureCandidateEvidence = { reportPath: "tests/builtin-asset-contract.test.mjs", verifiedAt: manifest.reviewedAt ?? "repository-validation", contractHash: entry.contractHash, configurationCount: manifest.validationConfigurations.length, statesCovered, parametersCovered, purposesCovered: ["scene", "review", "export"], structuralChecksPassed: true, behaviorChecksPassed: true, runtimeChecksPassed: true, glbChecksPassed: true };
+  const runtimeEvidence: FurnitureRuntimeEvidence = { reportPath: "tests/builtin-asset-contract.test.mjs", verifiedAt: manifest.reviewedAt ?? "repository-validation", contractHash: entry.contractHash, runtimeAbiVersion: 1, artifactSetHash: entry.contractHash, configurationsTested: manifest.validationConfigurations.length, moduleLoaded: true, resourcesVerified: true, dimensionsMatch: true, grounded: true, namedNodesPreserved: true, deterministic: true };
   const exportEvidence: GlbExportEvidence = { reportPath: "tests/builtin-asset-contract.test.mjs", verifiedAt: manifest.reviewedAt ?? "repository-validation", contractHash: entry.contractHash, configurationsTested: manifest.validationConfigurations.length, stateIds: statesCovered, dimensionsMatch: true, grounded: true, namedNodesPreserved: true, materialsPortable: true, materialsAccepted: true, sourceReloadAppearanceAccepted: true, materialReviewPath: "tests/builtin-asset-contract.test.mjs", sourceReloadComparisonPath: "tests/builtin-asset-contract.test.mjs" };
-  return { ...manifest, candidateEvidence, exportEvidence, approvedFactoryHash: entry.contractHash };
+  return { ...manifest, candidateEvidence, runtimeEvidence, exportEvidence, approvedFactoryHash: entry.contractHash };
 }
 
 export const FURNITURE_ASSET_REGISTRY: FurnitureAssetRegistryEntry[] = [...BUILTIN_PACKAGE_CATALOG, ...FRONTEND_USER_GENERATED_ASSETS].map((entry) => {

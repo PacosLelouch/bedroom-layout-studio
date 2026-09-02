@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { configurationIssues, findFurnitureAsset, itemConfiguration } from "./asset-registry";
-import { createFurnitureModel } from "./assets/runtime-cache";
 import { disposeObjectTree } from "./three-disposal";
-import type { FurnitureItem } from "./types";
+import type { FurnitureConfiguration, FurnitureItem } from "./types";
+import type { FurniturePackageRuntimeFactory } from "./assets/package-types";
 
 function safeFilePart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9\u3400-\u9fff_-]+/g, "-").replace(/^-+|-+$/g, "") || "furniture";
@@ -22,13 +22,8 @@ function prepareTreeForExport(root: THREE.Group) {
   root.updateMatrixWorld(true);
 }
 
-export async function createFurnitureGlb(item: FurnitureItem): Promise<{ data: ArrayBuffer; fileName: string }> {
-  const asset = findFurnitureAsset(item.assetId);
-  if (!asset) throw new Error("找不到这件家具的基础资产。");
-  if (!asset.exportReady) throw new Error("该资产尚未通过 GLB 外观兼容检视。");
-  const issues = configurationIssues(asset, itemConfiguration(item));
-  if (issues.length) throw new Error(issues.join("；"));
-  const group = await createFurnitureModel(item, "export");
+export async function createFurnitureGlbFromFactory(factory: FurniturePackageRuntimeFactory, configuration: FurnitureConfiguration, name: string): Promise<{ data: ArrayBuffer; fileName: string }> {
+  const group = factory(configuration, { purpose: "export" });
   try {
     prepareTreeForExport(group);
     const exporter = new GLTFExporter();
@@ -36,15 +31,29 @@ export async function createFurnitureGlb(item: FurnitureItem): Promise<{ data: A
     if (!(output instanceof ArrayBuffer) || output.byteLength === 0) throw new Error("GLB 导出结果为空。");
     return {
       data: output,
-      fileName: `${safeFilePart(item.name)}-${safeFilePart(item.stateId ?? "default")}.glb`,
+      fileName: `${safeFilePart(name)}-${safeFilePart(configuration.stateId ?? "default")}.glb`,
     };
   } finally {
     disposeObjectTree(group);
   }
 }
 
+export async function createFurnitureGlb(item: FurnitureItem): Promise<{ data: ArrayBuffer; fileName: string }> {
+  const asset = findFurnitureAsset(item.assetId);
+  if (!asset) throw new Error("找不到这件家具的基础资产。");
+  if (!asset.exportReady) throw new Error("该资产尚未通过 GLB 外观兼容检视。");
+  const issues = configurationIssues(asset, itemConfiguration(item));
+  if (issues.length) throw new Error(issues.join("；"));
+  const factory = await (await import("./assets/runtime-cache")).loadFurnitureRuntime(item.assetId);
+  return createFurnitureGlbFromFactory(factory, itemConfiguration(item), item.name);
+}
+
 export async function downloadFurnitureGlb(item: FurnitureItem) {
   const { data, fileName } = await createFurnitureGlb(item);
+  downloadGlbData(data, fileName);
+}
+
+export function downloadGlbData(data: ArrayBuffer, fileName: string) {
   const url = URL.createObjectURL(new Blob([data], { type: "model/gltf-binary" }));
   const anchor = document.createElement("a");
   anchor.href = url;

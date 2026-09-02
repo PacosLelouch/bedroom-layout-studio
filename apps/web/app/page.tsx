@@ -10,8 +10,11 @@ import {
   Save, Trash2, Undo2, Upload, X, PackagePlus, Cuboid,
 } from "lucide-react";
 import { BedroomViewportLoading } from "@/components/bedroom-viewport-loading";
+import { DataSourceStatus } from "@/components/data-source-status";
 import { AgentPanel } from "@/components/agent-panel";
 import { ASSET_CATALOG, catalogItemToFurniture, configurationIssues, findFurnitureAsset, itemConfiguration, nextFurnitureState } from "@/lib/bedroom/asset-registry";
+import { createBackendFurnitureAssetProvider, installPublishedFurnitureCatalog } from "@/lib/bedroom/assets";
+import { publicApiBaseUrl } from "@/lib/backend";
 import {
   deleteFurniturePreset, exportFurniturePresets, importFurniturePresets, loadFurniturePresets,
   presetIsStale, saveFurniturePreset,
@@ -35,6 +38,7 @@ function createClientId(prefix: string) {
 }
 
 export default function Home() {
+  const [assetCatalog, setAssetCatalog] = useState(() => [...ASSET_CATALOG]);
   const [layoutHistory, setLayoutHistory] = useState<LayoutHistory>(() => ({ past: [], present: INITIAL_ROOMS, future: [] }));
   const rooms = layoutHistory.present;
   const [roomId, setRoomId] = useState("master");
@@ -77,6 +81,22 @@ export default function Home() {
   useEffect(() => {
     const timer = window.setTimeout(() => setPresets(loadFurniturePresets()), 0);
     return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (!publicApiBaseUrl) return;
+    const abort = new AbortController();
+    createBackendFurnitureAssetProvider(publicApiBaseUrl).listCatalog()
+      .then((entries) => {
+        if (abort.signal.aborted) return;
+        setAssetCatalog(installPublishedFurnitureCatalog(entries));
+        window.dispatchEvent(new CustomEvent("bedroom:catalog-source", { detail: { source: "server" } }));
+      })
+      .catch((error) => {
+        if (abort.signal.aborted) return;
+        console.warn("Published furniture catalog could not be loaded; using bundled assets.", error);
+        window.dispatchEvent(new CustomEvent("bedroom:catalog-source", { detail: { source: "frontend" } }));
+      });
+    return () => abort.abort();
   }, []);
 
   const applyRooms = useCallback((updater: (current: RoomLayout[]) => RoomLayout[], recordHistory = true) => {
@@ -416,7 +436,7 @@ export default function Home() {
           </div>
           <div className="asset-search"><MousePointer2 size={15} /><span>点击家具添加到房间</span></div>
           <div className="asset-grid">
-            {ASSET_CATALOG.map((asset) => (
+            {assetCatalog.map((asset) => (
               <button key={asset.id} className="asset-card" onClick={() => addItem(asset.id)}>
                 <span className={`asset-thumb ${asset.id}`}>
                   {asset.category === "bed" ? <BedDouble size={30} /> : asset.category === "seat" ? <Armchair size={27} /> : <Box size={27} />}
@@ -454,6 +474,7 @@ export default function Home() {
         </aside>
 
         <section className="canvas-panel">
+          <DataSourceStatus />
           <div className="canvas-toolbar">
             <div className="segmented">
               <button className={viewMode === "top" ? "active" : ""} onClick={() => setViewMode("top")}><Grid3X3 size={15} /> 平面</button>

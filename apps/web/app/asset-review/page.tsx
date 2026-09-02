@@ -7,6 +7,7 @@ import {
   Layers3, Maximize2, Rotate3D, Ruler, ShieldCheck, Cuboid,
 } from "lucide-react";
 import { AssetReviewViewport } from "@/components/asset-review-viewport";
+import { DataSourceStatus } from "@/components/data-source-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,6 +174,21 @@ export default function AssetReviewPage() {
     }
   };
 
+  const exportGlb = async () => {
+    setReviewingGlb(true);
+    setDecisionError(null);
+    try {
+      const runtimeFactory = await loadFurnitureReviewFactory(asset.manifest.id);
+      const { createFurnitureGlbFromFactory, downloadGlbData } = await import("@/lib/bedroom/glb-export");
+      const result = await createFurnitureGlbFromFactory(runtimeFactory, previewConfiguration, asset.manifest.name);
+      downloadGlbData(result.data, result.fileName);
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : "无法导出当前 GLB。");
+    } finally {
+      setReviewingGlb(false);
+    }
+  };
+
   if (!asset) {
     return <main className="asset-review-empty"><Box size={36} /><h1>暂无家具资产</h1><p>内置家具和通过包装管线登记的用户家具会出现在这里。</p><Button asChild><Link href="/">返回布局工作台</Link></Button></main>;
   }
@@ -223,6 +239,7 @@ export default function AssetReviewPage() {
             <div className="model-frame">
               <div className="model-frame-label"><Rotate3D size={13} /> 拖拽旋转 · 滚轮缩放</div>
               <AssetReviewViewport asset={asset} dimensions={displayDimensions} configuration={previewConfiguration} view={view} onInspect={onInspect} />
+              <DataSourceStatus />
             </div>
           </div>
           <div className="review-stage-footer">
@@ -285,7 +302,7 @@ export default function AssetReviewPage() {
           </section>
 
           <section className="review-form-section">
-            <div className="review-capability-heading"><h2>临时 GLB 重载</h2><Button size="sm" variant="outline" disabled={!previewConfiguration || reviewingGlb} onClick={reviewGlb}><FileCheck2 />{reviewingGlb ? "检查中…" : "执行检查"}</Button></div>
+            <div className="review-capability-heading"><h2>临时 GLB 重载</h2><span className="review-glb-actions"><Button size="sm" variant="outline" disabled={!previewConfiguration || reviewingGlb} onClick={reviewGlb}><FileCheck2 />{reviewingGlb ? "处理中…" : "执行检查"}</Button><Button size="sm" disabled={!previewConfiguration || reviewingGlb} onClick={exportGlb}><Cuboid />导出 GLB</Button></span></div>
             {glbReview
               ? <p>{(glbReview.byteLength / 1024).toFixed(1)} KB · 尺寸{glbReview.dimensionsMatch ? "一致" : "不一致"} · {glbReview.grounded ? "已落地" : "未落地"} · {glbReview.namedNodeCount} 个命名节点 · {glbReview.materialCount} 个材质 · {glbReview.materialsPortable ? "材质可移植" : "检测到运行时着色，需提供导出材质"}</p>
               : <p>按当前尺寸、参数和状态生成独立 GLB，再重新载入比较包围盒、落地点、节点和材质可移植性。</p>}
