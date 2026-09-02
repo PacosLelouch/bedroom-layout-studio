@@ -32,7 +32,7 @@ export const FURNITURE_PACKAGE_CATALOG: FurnitureAssetCatalogEntry[] = [
   { manifest: manifest11 as FurnitureAssetManifestV3, contractHash: "d005c428785046cf28c75a637fb5b81c885132b8c852ca5ed1af1d21851ba07a" },
   { manifest: manifest12 as FurnitureAssetManifestV3, contractHash: "7e149239915ef0f4aed7e4a55b3e9725df96a1244a2ed4241a5ff5c77a853f3d" },
   { manifest: manifest13 as FurnitureAssetManifestV3, contractHash: "cc11c3c6a0a6422154e171a7eaff7334d4d24e00b6f7a19948a947f593ace4e5" },
-  { manifest: manifest14 as FurnitureAssetManifestV3, contractHash: "028a2d9b5457c77b2bba4f4a0bc145e56e3ae9daf196e1999eb2283f79ec5228" },
+  { manifest: manifest14 as FurnitureAssetManifestV3, contractHash: "690c85ad0a16cfdb66d8b86c118204f277fd20fa87f5ca5518d049abfba8b415" },
 ];
 
 export const BUILTIN_PACKAGE_CATALOG = FURNITURE_PACKAGE_CATALOG.filter((entry) => entry.manifest.assetScope === "builtin");

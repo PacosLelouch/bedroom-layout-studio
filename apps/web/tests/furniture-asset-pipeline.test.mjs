@@ -52,7 +52,7 @@ test("candidate evidence must match the current contract", () => {
 });
 
 test("img2threejs integration documentation uses the repository submodule", async () => {
-  const documentation = await readFile("docs/IMG2THREEJS_INTEGRATION.md", "utf8");
+  const documentation = await readFile("../../docs/IMG2THREEJS_INTEGRATION.md", "utf8");
   assert.match(documentation, /git submodule update --init --recursive/);
   assert.match(documentation, /Git submodule/);
 });

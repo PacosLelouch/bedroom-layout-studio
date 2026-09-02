@@ -20,19 +20,22 @@ if (basePath && !basePath.startsWith("/")) {
   throw new Error("PAGES_BASE_PATH 必须为空或以 / 开头。");
 }
 
-const nextCli = resolve("node_modules", "next", "dist", "bin", "next");
+const nextCli = resolve("..", "..", "node_modules", "next", "dist", "bin", "next");
 const registryCheck = spawnSync(process.execPath, [resolve("scripts", "sync-furniture-assets.mjs"), "--check"], {
   stdio: "inherit",
 });
 if (registryCheck.status !== 0) {
   process.exit(registryCheck.status ?? 1);
 }
-const result = spawnSync(process.execPath, [nextCli, "build"], {
+// Webpack resolves NodeNext's explicit `.js` specifiers back to workspace TypeScript
+// sources; Turbopack currently treats those specifiers as literal missing files.
+const result = spawnSync(process.execPath, [nextCli, "build", "--webpack"], {
   stdio: "inherit",
   env: {
     ...process.env,
     GITHUB_PAGES: "true",
     NEXT_PUBLIC_BASE_PATH: basePath,
+    PUBLIC_BASE_PATH: basePath,
   },
 });
 

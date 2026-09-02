@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { publicUrl } from "@/lib/public-url";
 import Link from "next/link";
 import {
   Armchair, BedDouble, Box, CheckCircle2, ChevronDown, Copy, Download, FileImage, FileUp, FolderOpen, Grid3X3, Layers3,
@@ -9,6 +10,7 @@ import {
   Save, Trash2, Undo2, Upload, X, PackagePlus, Cuboid,
 } from "lucide-react";
 import { BedroomViewportLoading } from "@/components/bedroom-viewport-loading";
+import { AgentPanel } from "@/components/agent-panel";
 import { ASSET_CATALOG, catalogItemToFurniture, configurationIssues, findFurnitureAsset, itemConfiguration, nextFurnitureState } from "@/lib/bedroom/asset-registry";
 import {
   deleteFurniturePreset, exportFurniturePresets, importFurniturePresets, loadFurniturePresets,
@@ -47,6 +49,7 @@ export default function Home() {
   const [layoutNotice, setLayoutNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [openActionMenu, setOpenActionMenu] = useState<"load" | "save" | null>(null);
   const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: "新房间", width: 3000, depth: 3600, height: 2800 });
   const [presets, setPresets] = useState<FurniturePreset[]>([]);
   const layoutFileRef = useRef<HTMLInputElement>(null);
@@ -364,6 +367,7 @@ export default function Home() {
           <button className="room-tab add-room" title="添加房间" aria-label="添加房间" onClick={() => setAddRoomOpen(true)}>＋</button>
         </nav>
         <div className="top-actions">
+          <button className="load-button" onClick={() => setAgentOpen((value) => !value)} aria-expanded={agentOpen}><Sparkles size={15} /> Agent</button>
           <button className={layoutHistory.past.length ? "icon-button" : "icon-button muted"} aria-label="撤销" title="撤销 Ctrl+Z" onClick={undo} disabled={!layoutHistory.past.length}><Undo2 size={17} /></button>
           <button className={layoutHistory.future.length ? "icon-button" : "icon-button muted"} aria-label="重做" title="重做 Ctrl+Y" onClick={redo} disabled={!layoutHistory.future.length}><Redo2 size={17} /></button>
           <div className="action-menu-wrap">
@@ -383,6 +387,8 @@ export default function Home() {
           <input ref={layoutFileRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={loadLayoutFile} />
         </div>
       </header>
+
+      <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} roomContext={{ id: room.id, name: room.name, dimensions: room.dimensions, itemCount: room.items.length }} />
 
       {layoutNotice && <div className={`layout-notice ${layoutNotice.kind}`} role="status">
         {layoutNotice.kind === "success" ? <CheckCircle2 size={15} /> : <Sparkles size={15} />}
@@ -477,7 +483,7 @@ export default function Home() {
             onChangeOutline={updateOutline} onToggleDoor={toggleDoor} onInteractItem={interactItem} /></Suspense>
           {showReference && room.planSrc && <aside className="plan-reference no-scrollbar" aria-label={`${room.name}标尺原图`}>
             <div className="plan-reference-heading"><span><strong>{room.name}标尺原图</strong><small>SVG · 尺寸权威来源</small></span><button onClick={() => setShowReference(false)} aria-label="关闭标尺原图"><X size={15} /></button></div>
-            <Image src={room.planSrc} alt={`${room.name}建筑标尺图`} width={1200} height={1300} unoptimized />
+            <Image src={publicUrl(room.planSrc)} alt={`${room.name}建筑标尺图`} width={1200} height={1300} unoptimized />
           </aside>}
           <div className="canvas-help">
             <span>{interactionMode === "interact" ? "单击素材触发交互" : interactionMode === "move" ? "拖拽家具移动" : interactionMode === "rotate" ? "左右拖拽家具旋转" : "拖拽橙色墙段控制点调整轮廓"}</span>

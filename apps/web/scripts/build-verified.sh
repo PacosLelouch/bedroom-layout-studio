@@ -18,19 +18,29 @@ command -v timeout || {
 }
 
 resolve_node_binary() {
-  local candidate="${node_hint}"
-  if [[ "${candidate}" =~ ^[A-Za-z]:\\ ]]; then
-    if command -v wslpath >/dev/null 2>&1; then
-      candidate="$(wslpath -u "${candidate}")"
-    elif command -v cygpath >/dev/null 2>&1; then
-      candidate="$(cygpath -u "${candidate}")"
+  local raw candidate drive rest major
+  for raw in "${node_hint}" "${BEDROOM_BUILD_NODE:-}" "${CODEX_MCP_NODE_PATH:-}" "$(command -v node || true)"; do
+    [[ -n "${raw}" ]] || continue
+    candidate="${raw}"
+    if [[ "${candidate}" =~ ^[A-Za-z]:\\ ]]; then
+      if command -v wslpath >/dev/null 2>&1; then
+        candidate="$(wslpath -u "${candidate}")"
+      elif command -v cygpath >/dev/null 2>&1; then
+        candidate="$(cygpath -u "${candidate}")"
+      else
+        drive="$(printf '%s' "${candidate:0:1}" | tr '[:upper:]' '[:lower:]')"
+        rest="${candidate:2}"
+        rest="${rest//\\//}"
+        candidate="/${drive}${rest}"
+      fi
     fi
-  fi
-  if [[ -n "${candidate}" && -x "${candidate}" ]]; then
-    printf '%s\n' "${candidate}"
-    return
-  fi
-  command -v node || true
+    [[ -x "${candidate}" ]] || continue
+    major="$("${candidate}" -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true)"
+    if [[ "${major}" =~ ^[0-9]+$ ]] && (( major >= 22 )); then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
 }
 
 node_binary="$(resolve_node_binary)"
@@ -54,7 +64,7 @@ node_path() {
   fi
 }
 
-vinext_cli_fs="${SITES_PROJECT_ROOT}/node_modules/vinext/dist/cli.js"
+vinext_cli_fs="${SITES_WORKSPACE_ROOT}/node_modules/vinext/dist/cli.js"
 if [[ ! -f "${vinext_cli_fs}" ]]; then
   echo "vinext is unavailable. Run npm run install:ci and wait for it to finish before building." >&2
   exit 69

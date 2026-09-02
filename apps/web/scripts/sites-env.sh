@@ -2,6 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+workspace_root="$(cd "${project_root}/../.." && pwd)"
 runtime_root="${SITES_RUNTIME_ROOT:-${project_root}/.sites-runtime}"
 
 mkdir -p \
@@ -13,6 +14,7 @@ mkdir -p \
 
 export SITES_ENV_READY=1
 export SITES_PROJECT_ROOT="${project_root}"
+export SITES_WORKSPACE_ROOT="${workspace_root}"
 export HOME="${runtime_root}/home"
 export XDG_CONFIG_HOME="${runtime_root}/xdg-config"
 export TMPDIR="${runtime_root}/tmp"

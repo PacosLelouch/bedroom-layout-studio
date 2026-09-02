@@ -19,6 +19,7 @@ import type { DimensionSourceType, ReviewViewId } from "@/lib/bedroom/assets/man
 import type {
   Dimensions3D, FurnitureParameterDefinition, FurnitureParameterValue,
 } from "@/lib/bedroom/types";
+import { publicBasePath as basePath, publicUrl } from "@/lib/public-url";
 
 const VIEW_LABELS: Record<ReviewViewId, string> = {
   reference: "参考",
@@ -29,8 +30,6 @@ const VIEW_LABELS: Record<ReviewViewId, string> = {
   top: "顶部",
   perspective: "透视",
 };
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export default function AssetReviewPage() {
   const [assetId, setAssetId] = useState(() => FURNITURE_REVIEW_ASSETS[0]?.manifest.id ?? "");
@@ -217,7 +216,7 @@ export default function AssetReviewPage() {
               {asset.manifest.referenceImage
                 ? <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`${basePath}${asset.manifest.referenceImage}`} alt={`${asset.manifest.name}参考图`} />
+                    <img src={publicUrl(asset.manifest.referenceImage)} alt={`${asset.manifest.name}参考图`} />
                   </>
                 : <div className="reference-placeholder"><Box size={34} /><strong>无外部参考图</strong><span>以默认配置、命名层级和导出重载结果为检视基准。</span></div>}
             </figure>

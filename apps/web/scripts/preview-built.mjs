@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 const root = process.cwd();
 const clientRoot = path.resolve(root, "dist", "client");
 const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? process.argv[2] ?? 5555);
+const host = process.env.WEB_HOST ?? "127.0.0.1";
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("WEB_PORT/PORT/port argument must be an integer between 1 and 65535.");
 }
@@ -50,4 +51,4 @@ const server = createServer(async (request, response) => {
   Readable.fromWeb(result.body).pipe(response);
 });
 
-server.listen(port, "0.0.0.0", () => console.log(`Built preview running at http://localhost:${port}`));
+server.listen(port, host, () => console.log(`Built preview running at http://${host}:${port}`));

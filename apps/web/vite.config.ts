@@ -10,6 +10,9 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
 const { d1, r2 } = hostingConfig;
 // Chromium blocks port 6666; use a distinct browser-safe project default.
 const webPort = Number(process.env.WEB_PORT ?? process.env.PORT ?? 5555);
+const webHost = process.env.WEB_HOST ?? "127.0.0.1";
+const publicBasePath = process.env.PUBLIC_BASE_PATH ?? "/";
+process.env.NEXT_PUBLIC_BASE_PATH ??= publicBasePath === "/" ? "" : publicBasePath.replace(/\/$/, "");
 
 if (!Number.isInteger(webPort) || webPort < 1 || webPort > 65_535) {
   throw new Error("WEB_PORT/PORT must be an integer between 1 and 65535.");
@@ -51,8 +54,13 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    base: publicBasePath,
+    define: {
+      "process.env.PUBLIC_API_BASE_URL": JSON.stringify(process.env.PUBLIC_API_BASE_URL ?? ""),
+      "process.env.PUBLIC_BASE_PATH": JSON.stringify(publicBasePath),
+    },
     server: {
-      host: "0.0.0.0",
+      host: webHost,
       port: webPort,
       // A second dev server would race the same dependency optimizer cache on Windows.
       strictPort: true,
@@ -78,7 +86,7 @@ export default defineConfig(async () => {
       }),
     ],
     preview: {
-      host: "0.0.0.0",
+      host: webHost,
       port: webPort,
       strictPort: true,
     },

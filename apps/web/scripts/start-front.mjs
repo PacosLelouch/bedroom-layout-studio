@@ -11,7 +11,7 @@ if (!hasPortArgument) {
   forwardedArgs.unshift("--port", defaultPort);
 }
 
-const cliPath = path.resolve("node_modules", "vinext", "dist", "cli.js");
+const cliPath = path.resolve("..", "..", "node_modules", "vinext", "dist", "cli.js");
 const child = spawn(process.execPath, [cliPath, "start", ...forwardedArgs], {
   stdio: "inherit",
   env: {

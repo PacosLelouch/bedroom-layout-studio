@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
+import { publicUrl } from "@/lib/public-url";
 import "./globals.css";
 
-const pagesBasePath =
-  process.env.GITHUB_PAGES === "true"
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? "")
-    : "";
-const faviconPath = `${pagesBasePath}/favicon.svg`;
+const faviconPath = publicUrl("/favicon.svg");
 
 export const metadata: Metadata = {
   title: "卧室布局工作台",
