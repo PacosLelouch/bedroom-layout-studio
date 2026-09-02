@@ -1,0 +1,30 @@
+[Unit]
+Description=Bedroom Layout Studio trusted Agent worker
+After=network-online.target postgresql.service bedroom-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bedroom-agent
+Group=bedroom-agent
+WorkingDirectory=/opt/bedroom-layout-studio
+EnvironmentFile=/etc/bedroom-layout-studio/worker.env
+ExecStart=/usr/bin/npm run start --workspace @bedroom/agent-worker
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/bedroom-layout-studio/.agents /opt/bedroom-layout-studio/apps/web/vendor
+ReadWritePaths=/srv/bedroom-layout-studio/agent-workspaces /opt/bedroom-layout-studio/.git
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+LimitNOFILE=65536
+TasksMax=256
+MemoryMax=8G
+CPUQuota=400%
+TimeoutStopSec=45s
+
+[Install]
+WantedBy=multi-user.target

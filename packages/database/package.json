@@ -1,0 +1,27 @@
+{
+  "name": "@bedroom/database",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/schema.test.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts"
+  },
+  "dependencies": {
+    "@bedroom/contracts": "0.2.0",
+    "drizzle-orm": "0.45.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "drizzle-kit": "0.31.10",
+    "tsx": "^4.23.13",
+    "typescript": "5.9.3"
+  }
+}

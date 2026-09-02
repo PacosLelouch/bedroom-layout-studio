@@ -1,0 +1,29 @@
+[Unit]
+Description=Bedroom Layout Studio API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bedroom-api
+Group=bedroom-api
+WorkingDirectory=/opt/bedroom-layout-studio
+EnvironmentFile=/etc/bedroom-layout-studio/api.env
+ExecStart=/usr/bin/npm run start --workspace @bedroom/api
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/bedroom-layout-studio/dev-storage
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+LimitNOFILE=65536
+TasksMax=256
+MemoryMax=4G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

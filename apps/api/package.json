@@ -1,0 +1,29 @@
+{
+  "name": "@bedroom/api",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/server.test.ts"
+  },
+  "dependencies": {
+    "@bedroom/contracts": "0.2.0",
+    "@bedroom/database": "0.2.0",
+    "@bedroom/furniture-assets": "0.2.0",
+    "@bedroom/storage": "0.2.0",
+    "@fastify/cors": "^11.3.0",
+    "drizzle-orm": "0.45.2",
+    "fastify": "^5.12.1",
+    "jose": "^6.2.10",
+    "pg-boss": "^12.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13",
+    "typescript": "5.9.3"
+  }
+}
